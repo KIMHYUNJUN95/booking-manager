@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-// ★ 중요: 깃허브 배포를 위해 HashRouter 사용 (BrowserRouter 대신)
+// 깃허브 배포를 위해 HashRouter 사용
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, query, where } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, query, where, deleteDoc, doc, orderBy } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -83,14 +83,30 @@ const styles = `
   }
   .chart-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
 
-  /* 테이블 */
+  /* 테이블 스타일 */
+  .building-section { margin-bottom: 40px; }
+  .building-title { font-size: 20px; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
   .table-card {
-    background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02); overflow: hidden;
   }
   .table-full { width: 100%; border-collapse: collapse; }
   .table-full th { text-align: left; padding: 16px; color: #86868B; font-size: 13px; border-bottom: 1px solid #F5F5F7; }
-  .table-full td { padding: 16px; border-bottom: 1px solid #F5F5F7; font-size: 15px; }
+  .table-full td { padding: 16px; border-bottom: 1px solid #F5F5F7; font-size: 15px; vertical-align: middle; }
   .table-full tr:last-child td { border-bottom: none; }
+
+  /* 상태 태그 */
+  .tag { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .tag-fire { color: #FF2D55; background-color: rgba(255, 45, 85, 0.1); }
+  .tag-good { color: #34C759; background-color: rgba(52, 199, 89, 0.1); }
+  .tag-warn { color: #FF9F0A; background-color: rgba(255, 159, 10, 0.1); }
+  .tag-cancel { color: #86868B; background-color: #F2F2F7; }
+
+  /* 삭제 버튼 */
+  .btn-delete {
+    background: none; border: none; cursor: pointer; padding: 8px; border-radius: 8px;
+    color: #FF3B30; transition: background 0.2s;
+  }
+  .btn-delete:hover { background-color: rgba(255, 59, 48, 0.1); }
 
   /* 입력 폼 */
   .form-wrapper {
@@ -126,14 +142,17 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// --- [3] 데이터 ---
+// --- [3] 데이터 (오쿠보 분리됨) ---
 const BUILDING_DATA = {
   "아라키초A": ["201호", "202호", "301호", "302호", "401호", "402호", "501호", "502호", "602호", "701호", "702호"],
   "아라키초B": ["101호", "102호", "201호", "202호", "301호", "302호", "401호", "402호"],
   "다이쿄초": ["B01호", "B02호", "101호", "102호", "201호", "202호", "302호"],
   "가부키초": ["202호", "203호", "302호", "303호", "402호", "403호", "502호", "603호", "802호", "803호"],
   "다카다노바바": ["2층", "3층", "4층", "5층", "6층", "7층", "8층", "9층"],
-  "오쿠보": ["A동", "B동", "C동"],
+  // 오쿠보 분리 (주택이라 독채로 설정)
+  "오쿠보A동": ["독채"],
+  "오쿠보B동": ["독채"],
+  "오쿠보C동": ["독채"],
   "사노시": ["독채"]
 };
 
@@ -170,6 +189,7 @@ function Sidebar() {
   const location = useLocation();
   const menuItems = [
     { path: "/", label: "대시보드", icon: "📊" },
+    { path: "/list", label: "예약 관리 (삭제)", icon: "📋" },
     { path: "/add", label: "예약 입력", icon: "➕" },
     { path: "/cancel", label: "취소 입력", icon: "❌" },
   ];
@@ -194,24 +214,129 @@ function Sidebar() {
   );
 }
 
+// 예약 리스트 및 삭제 컴포넌트
+function ReservationList() {
+  const [reservations, setReservations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7));
+
+  const fetchReservations = async () => {
+    setLoading(true);
+    const q = query(
+      collection(db, "reservations"),
+      where("date", ">=", `${targetMonth}-01`),
+      where("date", "<=", `${targetMonth}-31`),
+      orderBy("date", "desc")
+    );
+    const snapshot = await getDocs(q);
+    setReservations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchReservations(); }, [targetMonth]);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("정말 이 기록을 삭제하시겠습니까?")) return;
+    try {
+      await deleteDoc(doc(db, "reservations", id));
+      alert("삭제되었습니다.");
+      fetchReservations();
+    } catch (error) {
+      alert("삭제 실패: " + error.message);
+    }
+  };
+
+  return (
+    <div className="dashboard-content">
+      <div className="dashboard-header">
+        <h2 className="page-title">예약 관리 (기록 삭제)</h2>
+        <input type="month" className="month-select" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)} />
+      </div>
+
+      <div className="table-card">
+        <table className="table-full">
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>건물</th>
+              <th>객실</th>
+              <th>플랫폼</th>
+              <th>상태</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>로딩 중...</td></tr> : 
+             reservations.map((res) => (
+              <tr key={res.id}>
+                <td>{res.date}</td>
+                <td>{res.building}</td>
+                <td style={{fontWeight:'bold'}}>{res.room}</td>
+                <td>
+                  <span style={{color: res.platform === 'Airbnb' ? '#FF5A5F' : '#003580', fontWeight:'600'}}>
+                    {res.platform}
+                  </span>
+                </td>
+                <td>
+                  {res.status === 'cancelled' 
+                    ? <span className="tag tag-cancel">취소됨</span> 
+                    : <span className="tag tag-good">예약됨</span>}
+                </td>
+                <td>
+                  <button onClick={() => handleDelete(res.id)} className="btn-delete" title="삭제">
+                    🗑️ 삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!loading && reservations.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'40px'}}>데이터가 없습니다.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function StatsAnalysis() {
   const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [data, setData] = useState({ total: 0, cancelled: 0, buildings: [], platforms: [] });
+  const [data, setData] = useState({ total: 0, cancelled: 0, buildings: [], platforms: [], roomStats: {} });
 
   const fetchData = async () => {
     const q = query(collection(db, "reservations"), where("date", ">=", `${targetMonth}-01`), where("date", "<=", `${targetMonth}-31`));
     const snapshot = await getDocs(q);
     const reservations = snapshot.docs.map(doc => doc.data());
 
-    let total = 0; let cancelled = 0; const bCount = {}; const pCount = { Airbnb: 0, Booking: 0 };
+    let total = 0; let cancelled = 0; 
+    const bCount = {}; 
+    const pCount = { Airbnb: 0, Booking: 0 };
+    const rStats = {}; 
+
+    // 초기화
+    Object.keys(BUILDING_DATA).forEach(b => {
+      rStats[b] = {};
+      BUILDING_DATA[b].forEach(r => {
+        rStats[b][r] = { total: 0, cancelled: 0 };
+      });
+    });
+
     reservations.forEach(r => {
-      if (r.status === 'cancelled') { cancelled++; } 
-      else { total++; bCount[r.building] = (bCount[r.building] || 0) + 1; if (pCount[r.platform] !== undefined) pCount[r.platform]++; }
+      if (rStats[r.building] && rStats[r.building][r.room]) {
+        if (r.status === 'cancelled') { 
+          cancelled++;
+          rStats[r.building][r.room].cancelled++;
+        } else { 
+          total++; 
+          bCount[r.building] = (bCount[r.building] || 0) + 1; 
+          if (pCount[r.platform] !== undefined) pCount[r.platform]++;
+          rStats[r.building][r.room].total++;
+        }
+      }
     });
 
     const buildingChartData = Object.keys(bCount).map(key => ({ name: key, count: bCount[key] })).sort((a, b) => b.count - a.count);
     const platformChartData = [{ name: 'Airbnb', value: pCount.Airbnb }, { name: 'Booking', value: pCount.Booking }];
-    setData({ total, cancelled, buildings: buildingChartData, platforms: platformChartData });
+    
+    setData({ total, cancelled, buildings: buildingChartData, platforms: platformChartData, roomStats: rStats });
   };
 
   useEffect(() => { fetchData(); }, [targetMonth]);
@@ -223,6 +348,8 @@ function StatsAnalysis() {
         <h2 className="page-title">월별 성과 분석</h2>
         <input type="month" className="month-select" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)} />
       </div>
+      
+      {/* KPI & Charts */}
       <div className="kpi-grid">
         <div className="kpi-card"><div className="kpi-label">총 예약 건수</div><div className="kpi-value">{data.total}건</div><div className="kpi-sub trend-up">↗ 증가 추세</div></div>
         <div className="kpi-card"><div className="kpi-label">취소율</div><div className="kpi-value">{data.total + data.cancelled === 0 ? 0 : ((data.cancelled / (data.total + data.cancelled)) * 100).toFixed(1)}%</div><div className="kpi-sub">안정적</div></div>
@@ -243,18 +370,53 @@ function StatsAnalysis() {
           <div style={{display:'flex',justifyContent:'center',gap:'15px',marginTop:'10px',fontSize:'13px',color:'#666'}}><span style={{color:'#FF5A5F'}}>● Airbnb</span><span style={{color:'#003580'}}>● Booking</span></div>
         </div>
       </div>
-      <div className="table-card">
-        <div className="chart-title">📋 상세 데이터</div>
-        <table className="table-full">
-          <thead><tr><th>순위</th><th>건물명</th><th>예약 건수</th><th>상태</th></tr></thead>
-          <tbody>
-            {data.buildings.map((b, idx) => (
-              <tr key={b.name}><td>{idx+1}</td><td style={{fontWeight:'600'}}>{b.name}</td><td>{b.count}건</td><td><span style={{padding:'4px 8px',borderRadius:'6px',fontSize:'12px',fontWeight:'600',backgroundColor:idx===0?'rgba(52,199,89,0.1)':'rgba(0,0,0,0.05)',color:idx===0?'#34C759':'#86868B'}}>{idx===0?'최우수':'정상'}</span></td></tr>
-            ))}
-            {data.buildings.length===0 && <tr><td colSpan="4" style={{textAlign:'center',padding:'40px'}}>데이터 없음</td></tr>}
-          </tbody>
-        </table>
-      </div>
+
+      {/* 건물별 객실 상세 현황 */}
+      {Object.keys(data.roomStats).map((building) => {
+        const buildingTotal = Object.values(data.roomStats[building]).reduce((sum, r) => sum + r.total, 0);
+        if (buildingTotal === 0 && Object.values(data.roomStats[building]).every(r => r.cancelled === 0)) return null;
+
+        return (
+          <div key={building} className="building-section">
+            <div className="building-title">🏢 {building} <span style={{fontSize:'14px', fontWeight:'normal', color:'#86868B'}}>(총 {buildingTotal}건)</span></div>
+            <div className="table-card">
+              <table className="table-full">
+                <thead>
+                  <tr>
+                    <th style={{width:'30%'}}>객실명</th>
+                    <th>예약 건수</th>
+                    <th>예약 비중(%)</th>
+                    <th>상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(data.roomStats[building])
+                    .sort((a, b) => data.roomStats[building][b].total - data.roomStats[building][a].total)
+                    .map((room) => {
+                      const rData = data.roomStats[building][room];
+                      const share = buildingTotal === 0 ? 0 : ((rData.total / buildingTotal) * 100).toFixed(1);
+                      const isHot = Number(share) >= 15;
+                      const isLow = rData.total === 0;
+
+                      return (
+                        <tr key={room}>
+                          <td style={{fontWeight:'600'}}>{room}</td>
+                          <td>{rData.total}건</td>
+                          <td>{share}%</td>
+                          <td>
+                            {isHot && <span className="tag tag-fire">🔥 인기 객실</span>}
+                            {isLow && <span className="tag tag-warn">📉 예약 저조</span>}
+                            {!isHot && !isLow && <span className="tag tag-good">보통</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -315,7 +477,7 @@ function App() {
     <>
       <style>{styles}</style>
       <Router>
-        <div className="dashboard-layout"><Sidebar /><main className="main-content"><Routes><Route path="/" element={<StatsAnalysis />} /><Route path="/add" element={<AddReservation />} /><Route path="/cancel" element={<AddCancellation />} /></Routes></main></div>
+        <div className="dashboard-layout"><Sidebar /><main className="main-content"><Routes><Route path="/" element={<StatsAnalysis />} /><Route path="/list" element={<ReservationList />} /><Route path="/add" element={<AddReservation />} /><Route path="/cancel" element={<AddCancellation />} /></Routes></main></div>
       </Router>
     </>
   );

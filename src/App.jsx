@@ -193,7 +193,7 @@ function Sidebar() {
   );
 }
 
-// 1. [접수 실적 대시보드] - ★ 기준: 접수일(date) (입력된 날짜 기준)
+// 1. [접수 실적 대시보드] - 기준: 접수일(date) (입력된 날짜 기준)
 function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {}, okuboTotal: 0 });
 
@@ -492,14 +492,15 @@ function CancellationDashboard({ targetMonth, setTargetMonth }) {
   );
 }
 
-// 4. 기록 관리 리스트
+// 4. 기록 관리 리스트 (검색 기능 추가됨)
 function RecordList({ targetMonth, setTargetMonth }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // 검색어 상태
 
   const fetchRecords = async () => {
     setLoading(true);
-    // 기록 관리는 접수일(date) 기준이 관리하기 편함
+    // 접수일(date) 기준 정렬
     const q = query(
       collection(db, "reservations"), 
       where("date", ">=", `${targetMonth}-01`), 
@@ -514,10 +515,28 @@ function RecordList({ targetMonth, setTargetMonth }) {
 
   const handleDelete = async (id) => { if (window.confirm("삭제하시겠습니까?")) { await deleteDoc(doc(db, "reservations", id)); fetchRecords(); } };
 
+  // 검색어 필터링 로직
+  const filteredRecords = records.filter((res) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      res.building.toLowerCase().includes(term) || 
+      res.room.toLowerCase().includes(term)
+    );
+  });
+
   return (
     <div className="dashboard-content">
-      <div className="dashboard-header"><h2 className="page-title">전체 기록 관리</h2>
+      <div className="dashboard-header">
+        <h2 className="page-title">전체 기록 관리</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <input 
+            type="text" 
+            className="month-select" 
+            placeholder="건물명 또는 객실 검색" 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            style={{ width: '200px', cursor: 'text' }}
+          />
           <span style={{ fontSize: '14px', fontWeight: '600', color: '#86868B' }}>조회할 접수 월:</span>
           <input type="month" className="month-select" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} />
         </div>
@@ -526,7 +545,7 @@ function RecordList({ targetMonth, setTargetMonth }) {
         <table className="table-full">
           <thead><tr><th className="text-left">접수일</th><th className="text-left">숙박월</th><th>건물/객실</th><th>플랫폼</th><th>구분</th><th>관리</th></tr></thead>
           <tbody>
-            {records.map(res => (
+            {filteredRecords.map(res => (
               <tr key={res.id}>
                 <td className="text-left">{res.date}</td>
                 <td className="text-left" style={{ fontWeight: 'bold', color: '#5856D6' }}>{res.stayMonth}</td>
@@ -536,6 +555,9 @@ function RecordList({ targetMonth, setTargetMonth }) {
                 <td><button onClick={() => handleDelete(res.id)} className="btn-delete">🗑️ 삭제</button></td>
               </tr>
             ))}
+            {filteredRecords.length === 0 && (
+               <tr><td colSpan="6" style={{textAlign:'center', padding:'20px', color:'#86868B'}}>검색 결과가 없습니다.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

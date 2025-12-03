@@ -117,7 +117,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-
+  
   const handleLogin = async (e) => { 
     e.preventDefault(); 
     try { 
@@ -134,9 +134,9 @@ function Login() {
         <h1 className="login-title">Booking Manager</h1>
         <p className="login-subtitle">관리자 로그인</p>
         <form onSubmit={handleLogin}>
-          <input className="input-field" type="email" placeholder="이메일" value={email} onChange={e => setEmail(e.target.value)} />
-          <input className="input-field" type="password" placeholder="비밀번호" value={password} onChange={e => setPassword(e.target.value)} />
-          {error && <p style={{ color: '#FF3B30', fontSize: '13px' }}>{error}</p>}
+          <input className="input-field" type="email" placeholder="이메일" value={email} onChange={e=>setEmail(e.target.value)} />
+          <input className="input-field" type="password" placeholder="비밀번호" value={password} onChange={e=>setPassword(e.target.value)} />
+          {error && <p style={{color:'#FF3B30',fontSize:'13px'}}>{error}</p>}
           <button className="btn-primary" type="submit">로그인</button>
         </form>
       </div>
@@ -153,7 +153,7 @@ function Sidebar() {
     { path: "/add", label: "예약 입력", icon: "➕" },
     { path: "/add-cancel", label: "취소 입력", icon: "❌" },
   ];
-
+  
   const handleLogout = () => { 
     if(window.confirm("로그아웃 하시겠습니까?")) signOut(auth); 
   };
@@ -181,13 +181,18 @@ function Sidebar() {
   );
 }
 
-// 1. [예약 현황 대시보드] - 오직 '확정(confirmed)'만 보여줌
+// 1. [예약 현황 대시보드]
 function ReservationDashboard() {
   const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {} });
+  const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {}, okuboTotal: 0 });
 
   const fetchData = async () => {
-    const q = query(collection(db, "reservations"), where("date", ">=", `${targetMonth}-01`), where("date", "<=", `${targetMonth}-31`), where("status", "==", "confirmed"));
+    // status가 'confirmed'인 것만 조회
+    const q = query(
+      collection(db, "reservations"), 
+      where("stayMonth", "==", targetMonth), 
+      where("status", "==", "confirmed")
+    );
     const snapshot = await getDocs(q);
     const reservations = snapshot.docs.map(doc => doc.data());
 
@@ -212,9 +217,10 @@ function ReservationDashboard() {
       }
     });
 
+    const okuboTotal = (bCount["오쿠보A동"] || 0) + (bCount["오쿠보B동"] || 0) + (bCount["오쿠보C동"] || 0);
     const buildingChartData = Object.keys(bCount).map(key => ({ name: key, count: bCount[key] })).sort((a, b) => b.count - a.count);
     const platformChartData = [{ name: 'Airbnb', value: pCount.Airbnb }, { name: 'Booking', value: pCount.Booking }];
-    setData({ total, buildings: buildingChartData, platforms: platformChartData, roomStats: rStats });
+    setData({ total, buildings: buildingChartData, platforms: platformChartData, roomStats: rStats, okuboTotal });
   };
 
   useEffect(() => { fetchData(); }, [targetMonth]);
@@ -224,12 +230,15 @@ function ReservationDashboard() {
     <div className="dashboard-content">
       <div className="dashboard-header">
         <h2 className="page-title">예약 현황 (확정)</h2>
-        <input type="month" className="month-select" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} />
+        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+          <span style={{fontSize:'14px', fontWeight:'600', color:'#86868B'}}>조회할 예약 월:</span>
+          <input type="month" className="month-select" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)} />
+        </div>
       </div>
       <div className="kpi-grid">
         <div className="kpi-card"><div className="kpi-label">총 확정 예약</div><div className="kpi-value">{data.total}건</div><div className="kpi-sub trend-up">순수 예약</div></div>
-        <div className="kpi-card"><div className="kpi-label">Airbnb 확정</div><div className="kpi-value" style={{ color: '#FF5A5F' }}>{data.platforms[0]?.value}건</div></div>
-        <div className="kpi-card"><div className="kpi-label">Booking 확정</div><div className="kpi-value" style={{ color: '#003580' }}>{data.platforms[1]?.value}건</div></div>
+        <div className="kpi-card"><div className="kpi-label">Airbnb 확정</div><div className="kpi-value" style={{color:'#FF5A5F'}}>{data.platforms[0]?.value}건</div></div>
+        <div className="kpi-card"><div className="kpi-label">Booking 확정</div><div className="kpi-value" style={{color:'#003580'}}>{data.platforms[1]?.value}건</div></div>
       </div>
       
       <div className="charts-grid">
@@ -238,10 +247,10 @@ function ReservationDashboard() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.buildings}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5EA" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#86868B', fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#86868B', fontSize: 12 }} />
-              <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-              <Bar dataKey="count" fill="#0071E3" radius={[6, 6, 0, 0]} barSize={40} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#86868B',fontSize:12}} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill:'#86868B',fontSize:12}} />
+              <Tooltip cursor={{fill:'rgba(0,0,0,0.05)'}} />
+              <Bar dataKey="count" fill="#0071E3" radius={[6,6,0,0]} barSize={40} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -255,9 +264,9 @@ function ReservationDashboard() {
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '10px', fontSize: '13px', color: '#666' }}>
-            <span style={{ color: '#FF5A5F' }}>● Airbnb</span>
-            <span style={{ color: '#003580' }}>● Booking</span>
+          <div style={{display:'flex',justifyContent:'center',gap:'15px',marginTop:'10px',fontSize:'13px',color:'#666'}}>
+            <span style={{color:'#FF5A5F'}}>● Airbnb</span>
+            <span style={{color:'#003580'}}>● Booking</span>
           </div>
         </div>
       </div>
@@ -266,23 +275,30 @@ function ReservationDashboard() {
         const buildingTotal = Object.values(data.roomStats[building]).reduce((sum, r) => sum + r.total, 0);
         if (buildingTotal === 0) return null;
 
-        const isSingle = isSingleUnitBuilding(building);
-        const shareDenominator = isSingle ? data.total : buildingTotal;
-        const shareLabel = isSingle ? "전체 비중" : "건물내 비중";
+        let shareDenominator = buildingTotal;
+        let shareLabel = "건물내 비중";
+
+        if (building.startsWith("오쿠보")) {
+          shareDenominator = data.okuboTotal;
+          shareLabel = "오쿠보 전체 비중";
+        } else if (building === "사노시") {
+          shareDenominator = data.total;
+          shareLabel = "전체 비중";
+        }
 
         return (
           <div key={building} className="building-section">
-            <div className="building-title">🏢 {building} <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#86868B' }}>(총 {buildingTotal}건)</span></div>
+            <div className="building-title">🏢 {building} <span style={{fontSize:'14px', fontWeight:'normal', color:'#86868B'}}>(총 {buildingTotal}건)</span></div>
             <div className="table-card">
               <table className="table-full">
-                <thead><tr><th className="text-left" style={{ width: '30%' }}>객실명</th><th>Airbnb</th><th>Booking</th><th>합계</th><th>{shareLabel}(%)</th></tr></thead>
+                <thead><tr><th className="text-left" style={{width:'30%'}}>객실명</th><th>Airbnb</th><th>Booking</th><th>합계</th><th>{shareLabel}(%)</th></tr></thead>
                 <tbody>
-                  {Object.keys(data.roomStats[building]).sort((a, b) => data.roomStats[building][b].total - data.roomStats[building][a].total).map((room) => {
+                  {Object.keys(data.roomStats[building]).sort((a,b)=>data.roomStats[building][b].total - data.roomStats[building][a].total).map((room) => {
                     const rData = data.roomStats[building][room];
                     const share = shareDenominator === 0 ? 0 : ((rData.total / shareDenominator) * 100).toFixed(1);
                     return (
                       <tr key={room}>
-                        <td className="text-left" style={{ fontWeight: '600' }}>{room}</td>
+                        <td className="text-left" style={{fontWeight:'600'}}>{room}</td>
                         <td><span className="pf-text-airbnb">{rData.airbnb}</span></td>
                         <td><span className="pf-text-booking">{rData.booking}</span></td>
                         <td><strong>{rData.total}</strong></td>
@@ -300,13 +316,18 @@ function ReservationDashboard() {
   );
 }
 
-// 2. [취소 현황 대시보드] - 오직 '취소(cancelled)'만 보여줌
+// 2. [취소 현황 대시보드]
 function CancellationDashboard() {
   const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7));
   const [data, setData] = useState({ total: 0, buildings: [], roomStats: {} });
 
   const fetchData = async () => {
-    const q = query(collection(db, "reservations"), where("date", ">=", `${targetMonth}-01`), where("date", "<=", `${targetMonth}-31`), where("status", "==", "cancelled"));
+    // status가 'cancelled'인 것만 조회
+    const q = query(
+      collection(db, "reservations"), 
+      where("stayMonth", "==", targetMonth), 
+      where("status", "==", "cancelled")
+    );
     const snapshot = await getDocs(q);
     const cancellations = snapshot.docs.map(doc => doc.data());
 
@@ -336,11 +357,14 @@ function CancellationDashboard() {
   return (
     <div className="dashboard-content">
       <div className="dashboard-header">
-        <h2 className="page-title" style={{ color: '#FF3B30' }}>취소 현황 (분석)</h2>
-        <input type="month" className="month-select" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} />
+        <h2 className="page-title" style={{color:'#FF3B30'}}>취소 현황 (분석)</h2>
+        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+          <span style={{fontSize:'14px', fontWeight:'600', color:'#86868B'}}>조회할 예약 월:</span>
+          <input type="month" className="month-select" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)} />
+        </div>
       </div>
       <div className="kpi-grid">
-        <div className="kpi-card"><div className="kpi-label">총 취소 건수</div><div className="kpi-value" style={{ color: '#FF3B30' }}>{data.total}건</div><div className="kpi-sub">이번 달 발생</div></div>
+        <div className="kpi-card"><div className="kpi-label">총 취소 건수</div><div className="kpi-value" style={{color:'#FF3B30'}}>{data.total}건</div><div className="kpi-sub">해당 월 예약 취소</div></div>
         <div className="kpi-card"><div className="kpi-label">취소 1위 건물</div><div className="kpi-value">{data.buildings.length > 0 ? data.buildings[0].name : '-'}</div></div>
       </div>
 
@@ -350,10 +374,9 @@ function CancellationDashboard() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.buildings}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5EA" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#86868B', fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#86868B', fontSize: 12 }} />
-              <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-              <Bar dataKey="count" fill="#FF3B30" radius={[6, 6, 0, 0]} barSize={40} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill:'#86868B',fontSize:12}} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill:'#86868B',fontSize:12}} /><Tooltip cursor={{fill:'rgba(0,0,0,0.05)'}} />
+              <Bar dataKey="count" fill="#FF3B30" radius={[6,6,0,0]} barSize={40} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -365,15 +388,15 @@ function CancellationDashboard() {
 
         return (
           <div key={building} className="building-section">
-            <div className="building-title">🏢 {building} <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#FF3B30' }}>(취소 {buildingTotal}건)</span></div>
+            <div className="building-title">🏢 {building} <span style={{fontSize:'14px', fontWeight:'normal', color:'#FF3B30'}}>(취소 {buildingTotal}건)</span></div>
             <div className="table-card">
               <table className="table-full">
                 <thead><tr><th className="text-left">객실명</th><th>취소 건수</th><th>상태</th></tr></thead>
                 <tbody>
                   {Object.keys(data.roomStats[building]).filter(r => data.roomStats[building][r] > 0).map((room) => (
                     <tr key={room}>
-                      <td className="text-left" style={{ fontWeight: '600' }}>{room}</td>
-                      <td><span style={{ color: '#FF3B30', fontWeight: 'bold' }}>{data.roomStats[building][room]}건</span></td>
+                      <td className="text-left" style={{fontWeight:'600'}}>{room}</td>
+                      <td><span style={{color:'#FF3B30', fontWeight:'bold'}}>{data.roomStats[building][room]}건</span></td>
                       <td><span className="tag tag-cancel">취소 발생</span></td>
                     </tr>
                   ))}
@@ -395,7 +418,12 @@ function RecordList() {
 
   const fetchRecords = async () => {
     setLoading(true);
-    const q = query(collection(db, "reservations"), where("date", ">=", `${targetMonth}-01`), where("date", "<=", `${targetMonth}-31`), orderBy("date", "desc"));
+    // stayMonth 기준으로 조회
+    const q = query(
+      collection(db, "reservations"), 
+      where("stayMonth", "==", targetMonth), 
+      orderBy("date", "desc")
+    );
     const snapshot = await getDocs(q);
     setRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     setLoading(false);
@@ -406,18 +434,24 @@ function RecordList() {
 
   return (
     <div className="dashboard-content">
-      <div className="dashboard-header"><h2 className="page-title">전체 기록 관리</h2><input type="month" className="month-select" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} /></div>
+      <div className="dashboard-header"><h2 className="page-title">전체 기록 관리</h2>
+        <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+          <span style={{fontSize:'14px', fontWeight:'600', color:'#86868B'}}>조회할 예약 월:</span>
+          <input type="month" className="month-select" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)} />
+        </div>
+      </div>
       <div className="table-card">
         <table className="table-full">
-          <thead><tr><th className="text-left">날짜</th><th>건물/객실</th><th>플랫폼</th><th>구분</th><th>관리</th></tr></thead>
+          <thead><tr><th className="text-left">접수일</th><th className="text-left">예약월</th><th>건물/객실</th><th>플랫폼</th><th>구분</th><th>관리</th></tr></thead>
           <tbody>
             {records.map(res => (
               <tr key={res.id}>
                 <td className="text-left">{res.date}</td>
+                <td className="text-left" style={{fontWeight:'bold', color:'#0071E3'}}>{res.stayMonth}</td>
                 <td>{res.building} {res.room}</td>
-                <td><span className={res.platform === 'Airbnb' ? 'pf-text-airbnb' : 'pf-text-booking'}>{res.platform}</span></td>
-                <td>{res.status === 'cancelled' ? <span className="tag tag-cancel">취소기록</span> : <span className="tag tag-good">예약확정</span>}</td>
-                <td><button onClick={() => handleDelete(res.id)} className="btn-delete">🗑️ 삭제</button></td>
+                <td><span className={res.platform==='Airbnb'?'pf-text-airbnb':'pf-text-booking'}>{res.platform}</span></td>
+                <td>{res.status==='cancelled' ? <span className="tag tag-cancel">취소기록</span> : <span className="tag tag-good">예약확정</span>}</td>
+                <td><button onClick={()=>handleDelete(res.id)} className="btn-delete">🗑️ 삭제</button></td>
               </tr>
             ))}
           </tbody>
@@ -427,29 +461,41 @@ function RecordList() {
   );
 }
 
+// 4. 입력 화면들
 function AddReservation() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [stayMonth, setStayMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
   const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
   const [platform, setPlatform] = useState('Airbnb');
   const [count, setCount] = useState(1);
+  
   const handleSubmit = async (e) => {
-    e.preventDefault(); if (!window.confirm("저장하시겠습니까?")) return;
+    e.preventDefault(); if(!window.confirm("저장하시겠습니까?")) return;
     try {
       const promises = [];
-      for (let i = 0; i < count; i++) promises.push(addDoc(collection(db, "reservations"), { date, building: selectedBuilding, room: selectedRoom, platform, status: "confirmed", createdAt: new Date() }));
+      for(let i=0; i<count; i++) promises.push(addDoc(collection(db, "reservations"), { 
+        date, 
+        stayMonth, 
+        building: selectedBuilding, 
+        room: selectedRoom, 
+        platform, 
+        status: "confirmed", 
+        createdAt: new Date() 
+      }));
       await Promise.all(promises); alert("완료!");
     } catch { alert("오류"); }
   };
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-      <div className="form-wrapper"><h2 style={{ textAlign: 'center', marginBottom: '30px' }}>새 예약 등록</h2>
+    <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100%'}}>
+      <div className="form-wrapper"><h2 style={{textAlign:'center',marginBottom:'30px'}}>새 예약 등록</h2>
         <form onSubmit={handleSubmit}>
-          <label className="input-label">날짜</label><input className="input-field" type="date" value={date} onChange={e => setDate(e.target.value)} />
-          <label className="input-label">건물</label><select className="input-field" value={selectedBuilding} onChange={e => { setSelectedBuilding(e.target.value); setSelectedRoom(BUILDING_DATA[e.target.value][0]); }}>{Object.keys(BUILDING_DATA).map(b => <option key={b} value={b}>{b}</option>)}</select>
-          <label className="input-label">객실</label><select className="input-field" value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)}>{BUILDING_DATA[selectedBuilding].map(r => <option key={r} value={r}>{r}</option>)}</select>
-          <label className="input-label">플랫폼</label><select className="input-field" value={platform} onChange={e => setPlatform(e.target.value)}><option value="Airbnb">Airbnb</option><option value="Booking">Booking.com</option></select>
-          <label className="input-label">예약 건수 (동시)</label><input className="input-field" type="number" min="1" value={count} onChange={e => setCount(parseInt(e.target.value))} />
+          <label className="input-label">접수일 (오늘 날짜)</label><input className="input-field" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          <label className="input-label">예약 월 (숙박 대상)</label><input className="input-field" type="month" value={stayMonth} onChange={e=>setStayMonth(e.target.value)} style={{border:'2px solid #0071E3'}} />
+          <label className="input-label">건물</label><select className="input-field" value={selectedBuilding} onChange={e=>{setSelectedBuilding(e.target.value);setSelectedRoom(BUILDING_DATA[e.target.value][0]);}}>{Object.keys(BUILDING_DATA).map(b=><option key={b} value={b}>{b}</option>)}</select>
+          <label className="input-label">객실</label><select className="input-field" value={selectedRoom} onChange={e=>setSelectedRoom(e.target.value)}>{BUILDING_DATA[selectedBuilding].map(r=><option key={r} value={r}>{r}</option>)}</select>
+          <label className="input-label">플랫폼</label><select className="input-field" value={platform} onChange={e=>setPlatform(e.target.value)}><option value="Airbnb">Airbnb</option><option value="Booking">Booking.com</option></select>
+          <label className="input-label">예약 건수 (동시)</label><input className="input-field" type="number" min="1" value={count} onChange={e=>setCount(parseInt(e.target.value))} />
           <button className="btn-primary" type="submit">저장하기</button>
         </form>
       </div>
@@ -459,27 +505,37 @@ function AddReservation() {
 
 function AddCancellation() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [stayMonth, setStayMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
   const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
   const [platform, setPlatform] = useState('Airbnb');
   const [count, setCount] = useState(1);
   const handleSubmit = async (e) => {
-    e.preventDefault(); if (!window.confirm("취소 기록을 등록하시겠습니까?")) return;
+    e.preventDefault(); if(!window.confirm("취소 기록을 등록하시겠습니까?")) return;
     try {
       const promises = [];
-      for (let i = 0; i < count; i++) promises.push(addDoc(collection(db, "reservations"), { date, building: selectedBuilding, room: selectedRoom, platform, status: "cancelled", createdAt: new Date() }));
+      for(let i=0; i<count; i++) promises.push(addDoc(collection(db, "reservations"), { 
+        date, 
+        stayMonth, 
+        building: selectedBuilding, 
+        room: selectedRoom, 
+        platform, 
+        status: "cancelled", 
+        createdAt: new Date() 
+      }));
       await Promise.all(promises); alert("등록 완료");
     } catch { alert("오류"); }
   };
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-      <div className="form-wrapper"><h2 style={{ textAlign: 'center', marginBottom: '30px', color: '#FF3B30' }}>취소 기록 등록</h2>
+    <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100%'}}>
+      <div className="form-wrapper"><h2 style={{textAlign:'center',marginBottom:'30px',color:'#FF3B30'}}>취소 기록 등록</h2>
         <form onSubmit={handleSubmit}>
-          <label className="input-label">취소 날짜</label><input className="input-field" type="date" value={date} onChange={e => setDate(e.target.value)} />
-          <label className="input-label">건물</label><select className="input-field" value={selectedBuilding} onChange={e => { setSelectedBuilding(e.target.value); setSelectedRoom(BUILDING_DATA[e.target.value][0]); }}>{Object.keys(BUILDING_DATA).map(b => <option key={b} value={b}>{b}</option>)}</select>
-          <label className="input-label">객실</label><select className="input-field" value={selectedRoom} onChange={e => setSelectedRoom(e.target.value)}>{BUILDING_DATA[selectedBuilding].map(r => <option key={r} value={r}>{r}</option>)}</select>
-          <label className="input-label">플랫폼</label><select className="input-field" value={platform} onChange={e => setPlatform(e.target.value)}><option value="Airbnb">Airbnb</option><option value="Booking">Booking.com</option></select>
-          <label className="input-label">취소 건수</label><input className="input-field" type="number" min="1" value={count} onChange={e => setCount(parseInt(e.target.value))} />
+          <label className="input-label">취소 접수일</label><input className="input-field" type="date" value={date} onChange={e=>setDate(e.target.value)} />
+          <label className="input-label">취소된 예약 월</label><input className="input-field" type="month" value={stayMonth} onChange={e=>setStayMonth(e.target.value)} style={{border:'2px solid #FF3B30'}} />
+          <label className="input-label">건물</label><select className="input-field" value={selectedBuilding} onChange={e=>{setSelectedBuilding(e.target.value);setSelectedRoom(BUILDING_DATA[e.target.value][0]);}}>{Object.keys(BUILDING_DATA).map(b=><option key={b} value={b}>{b}</option>)}</select>
+          <label className="input-label">객실</label><select className="input-field" value={selectedRoom} onChange={e=>setSelectedRoom(e.target.value)}>{BUILDING_DATA[selectedBuilding].map(r=><option key={r} value={r}>{r}</option>)}</select>
+          <label className="input-label">플랫폼</label><select className="input-field" value={platform} onChange={e=>setPlatform(e.target.value)}><option value="Airbnb">Airbnb</option><option value="Booking">Booking.com</option></select>
+          <label className="input-label">취소 건수</label><input className="input-field" type="number" min="1" value={count} onChange={e=>setCount(parseInt(e.target.value))} />
           <button className="btn-primary btn-danger" type="submit">취소 등록</button>
         </form>
       </div>
@@ -491,24 +547,19 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => { const unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); }); return () => unsubscribe(); }, []);
-  if (loading) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>로딩 중...</div>;
+  if (loading) return <div style={{height:'100vh',display:'flex',justifyContent:'center',alignItems:'center'}}>로딩 중...</div>;
   if (!user) return <><style>{styles}</style><Login /></>;
   return (
     <>
       <style>{styles}</style>
       <Router>
-        <div className="dashboard-layout">
-          <Sidebar />
-          <main className="main-content">
-            <Routes>
-              <Route path="/" element={<ReservationDashboard />} />
-              <Route path="/cancellations" element={<CancellationDashboard />} />
-              <Route path="/list" element={<RecordList />} />
-              <Route path="/add" element={<AddReservation />} />
-              <Route path="/add-cancel" element={<AddCancellation />} />
-            </Routes>
-          </main>
-        </div>
+        <div className="dashboard-layout"><Sidebar /><main className="main-content"><Routes>
+          <Route path="/" element={<ReservationDashboard />} />
+          <Route path="/cancellations" element={<CancellationDashboard />} />
+          <Route path="/list" element={<RecordList />} />
+          <Route path="/add" element={<AddReservation />} />
+          <Route path="/add-cancel" element={<AddCancellation />} />
+        </Routes></main></div>
       </Router>
     </>
   );

@@ -160,7 +160,6 @@ function Sidebar() {
     if (window.confirm("로그아웃 하시겠습니까?")) signOut(auth);
   };
 
-  // 메뉴 활성화 로직
   const getActiveClass = (path) => {
     if (location.pathname === path) {
       if (path === '/occupancy') return 'active-purple';
@@ -193,12 +192,11 @@ function Sidebar() {
   );
 }
 
-// 1. [접수 실적 대시보드] - 기준: 접수일(date) (입력된 날짜 기준)
+// 1. [접수 실적 대시보드]
 function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {}, okuboTotal: 0 });
 
   const fetchData = async () => {
-    // 접수일(date)이 선택한 달에 포함되는지 확인
     const q = query(
       collection(db, "reservations"), 
       where("date", ">=", `${targetMonth}-01`), 
@@ -257,7 +255,6 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
         <div className="chart-card"><div className="chart-title">⚖️ 플랫폼 점유율</div><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={data.platforms} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">{data.platforms.map((entry, index) => (<Cell key={`cell-${index}`} fill={PIE_COLORS[index]} />))}</Pie><Tooltip /></PieChart></ResponsiveContainer><div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '10px', fontSize: '13px', color: '#666' }}><span style={{ color: '#FF5A5F' }}>● Airbnb</span><span style={{ color: '#003580' }}>● Booking</span></div></div>
       </div>
 
-      {/* 건물별 상세 표 */}
       {Object.keys(data.roomStats).map((building) => {
         const buildingTotal = Object.values(data.roomStats[building]).reduce((sum, r) => sum + r.total, 0);
         if (buildingTotal === 0) return null;
@@ -303,12 +300,11 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   );
 }
 
-// 2. [숙박 현황 대시보드] - 기준: 숙박월(stayMonth) (실제 묵는 날짜 기준)
+// 2. [숙박 현황 대시보드] - 기준: 숙박월(stayMonth)
 function OccupancyDashboard({ targetMonth, setTargetMonth }) {
   const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {}, okuboTotal: 0 });
 
   const fetchData = async () => {
-    // ★ 기준: stayMonth (숙박월)
     const q = query(
       collection(db, "reservations"), 
       where("stayMonth", "==", targetMonth), 
@@ -492,15 +488,17 @@ function CancellationDashboard({ targetMonth, setTargetMonth }) {
   );
 }
 
-// 4. 기록 관리 리스트 (검색 기능 추가됨)
+// 4. 기록 관리 리스트 (검색 필터 기능 추가)
 function RecordList({ targetMonth, setTargetMonth }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(""); // 검색어 상태
+  
+  // ★ 검색용 상태 추가
+  const [selectedBuilding, setSelectedBuilding] = useState("전체");
+  const [selectedRoom, setSelectedRoom] = useState("전체");
 
   const fetchRecords = async () => {
     setLoading(true);
-    // 접수일(date) 기준 정렬
     const q = query(
       collection(db, "reservations"), 
       where("date", ">=", `${targetMonth}-01`), 
@@ -515,13 +513,13 @@ function RecordList({ targetMonth, setTargetMonth }) {
 
   const handleDelete = async (id) => { if (window.confirm("삭제하시겠습니까?")) { await deleteDoc(doc(db, "reservations", id)); fetchRecords(); } };
 
-  // 검색어 필터링 로직
+  // ★ 필터링 로직 적용
   const filteredRecords = records.filter((res) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      res.building.toLowerCase().includes(term) || 
-      res.room.toLowerCase().includes(term)
-    );
+    // 1. 건물 필터
+    if (selectedBuilding !== "전체" && res.building !== selectedBuilding) return false;
+    // 2. 객실 필터
+    if (selectedRoom !== "전체" && res.room !== selectedRoom) return false;
+    return true;
   });
 
   return (
@@ -529,15 +527,32 @@ function RecordList({ targetMonth, setTargetMonth }) {
       <div className="dashboard-header">
         <h2 className="page-title">전체 기록 관리</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <input 
-            type="text" 
+          {/* 건물 선택 */}
+          <select 
             className="month-select" 
-            placeholder="건물명 또는 객실 검색" 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            style={{ width: '200px', cursor: 'text' }}
-          />
-          <span style={{ fontSize: '14px', fontWeight: '600', color: '#86868B' }}>조회할 접수 월:</span>
+            value={selectedBuilding} 
+            onChange={(e) => {
+              setSelectedBuilding(e.target.value);
+              setSelectedRoom("전체"); // 건물 바꾸면 객실 초기화
+            }}
+          >
+            <option value="전체">전체 건물</option>
+            {Object.keys(BUILDING_DATA).map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+
+          {/* 객실 선택 (건물 선택 시에만 활성화) */}
+          {selectedBuilding !== "전체" && (
+            <select 
+              className="month-select" 
+              value={selectedRoom} 
+              onChange={(e) => setSelectedRoom(e.target.value)}
+            >
+              <option value="전체">전체 객실</option>
+              {BUILDING_DATA[selectedBuilding].map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          )}
+
+          <span style={{ fontSize: '14px', fontWeight: '600', color: '#86868B', marginLeft: '10px' }}>조회할 접수 월:</span>
           <input type="month" className="month-select" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} />
         </div>
       </div>
@@ -556,7 +571,7 @@ function RecordList({ targetMonth, setTargetMonth }) {
               </tr>
             ))}
             {filteredRecords.length === 0 && (
-               <tr><td colSpan="6" style={{textAlign:'center', padding:'20px', color:'#86868B'}}>검색 결과가 없습니다.</td></tr>
+              <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px', color: '#86868B'}}>검색 결과가 없습니다.</td></tr>
             )}
           </tbody>
         </table>

@@ -5,7 +5,7 @@ import { getFirestore, collection, addDoc, getDocs, query, where, deleteDoc, doc
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-// --- [1] 디자인 (Apple Style CSS) ---
+// --- [1] 디자인 (Apple Style CSS + Modal) ---
 const styles = `
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
   body {
@@ -81,6 +81,20 @@ const styles = `
   .btn-primary:active { transform: scale(0.98); }
   .btn-danger { background: #FF3B30; }
   .month-select { padding: 10px 16px; border-radius: 10px; border: 1px solid #E5E5EA; background: white; font-size: 15px; font-weight: 500; cursor: pointer; }
+
+  /* ★ 모달 스타일 (팝업창) */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 20000; backdrop-filter: blur(5px); }
+  .modal-content { background: white; padding: 30px; border-radius: 24px; width: 90%; max-width: 450px; max-height: 70vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.15); animation: popIn 0.2s ease; }
+  @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #f5f5f5; padding-bottom: 15px; }
+  .modal-title { font-size: 18px; font-weight: 700; color: #1D1D1F; }
+  .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #86868B; }
+  .modal-list-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f5f5f7; font-size: 15px; }
+  .modal-date-label { color: #86868B; font-size: 13px; margin-bottom: 4px; }
+  
+  /* 클릭 가능한 숫자 스타일 */
+  .clickable-number { cursor: pointer; text-decoration: underline; text-underline-offset: 4px; transition: opacity 0.2s; }
+  .clickable-number:hover { opacity: 0.6; }
 `;
 
 // --- [2] 파이어베이스 설정 ---
@@ -110,7 +124,6 @@ const BUILDING_DATA = {
   "사노시": ["독채"]
 };
 
-// 독채 판별 (통계용)
 const isSingleUnitBuilding = (b) => b.startsWith("오쿠보") || b === "사노시";
 
 // --- [4] 컴포넌트 ---
@@ -192,9 +205,43 @@ function Sidebar() {
   );
 }
 
-// 1. [접수 실적 대시보드]
+// ★ 상세 내역 모달 컴포넌트 (NEW)
+function DetailModal({ title, data, onClose }) {
+  if (!data) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {data.length === 0 ? <p style={{textAlign:'center', color:'#999'}}>데이터가 없습니다.</p> : 
+           data.map((item, idx) => (
+            <div key={idx} className="modal-list-item">
+              <div>
+                <div className="modal-date-label">숙박 예정 월</div>
+                <div style={{fontWeight:'bold', color:'#5856D6'}}>{item.stayMonth}</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div className="modal-date-label">접수일</div>
+                <div>{item.date}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 1. [접수 실적 대시보드] - 팝업 기능 추가
 function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {}, okuboTotal: 0 });
+  // 팝업용 상태
+  const [modalData, setModalData] = useState(null);
+  const [modalTitle, setModalTitle] = useState("");
 
   const fetchData = async () => {
     const q = query(
@@ -213,7 +260,12 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
 
     Object.keys(BUILDING_DATA).forEach(b => {
       rStats[b] = {};
-      BUILDING_DATA[b].forEach(r => { rStats[b][r] = { total: 0, airbnb: 0, booking: 0 }; });
+      BUILDING_DATA[b].forEach(r => { 
+        rStats[b][r] = { 
+          total: 0, airbnb: 0, booking: 0, 
+          airbnbList: [], bookingList: [] // 리스트 저장용 배열 추가
+        }; 
+      });
     });
 
     reservations.forEach(r => {
@@ -222,8 +274,14 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
         bCount[r.building] = (bCount[r.building] || 0) + 1;
         if (pCount[r.platform] !== undefined) pCount[r.platform]++;
         rStats[r.building][r.room].total++;
-        if (r.platform === 'Airbnb') rStats[r.building][r.room].airbnb++;
-        else if (r.platform === 'Booking') rStats[r.building][r.room].booking++;
+        
+        if (r.platform === 'Airbnb') {
+          rStats[r.building][r.room].airbnb++;
+          rStats[r.building][r.room].airbnbList.push(r); // 데이터 저장
+        } else if (r.platform === 'Booking') {
+          rStats[r.building][r.room].booking++;
+          rStats[r.building][r.room].bookingList.push(r); // 데이터 저장
+        }
       }
     });
 
@@ -236,6 +294,14 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   useEffect(() => { fetchData(); }, [targetMonth]);
   const PIE_COLORS = ['#FF5A5F', '#003580'];
 
+  // 클릭 핸들러
+  const handleNumberClick = (title, list) => {
+    if (list && list.length > 0) {
+      setModalTitle(title);
+      setModalData(list);
+    }
+  };
+
   return (
     <div className="dashboard-content">
       <div className="dashboard-header">
@@ -245,6 +311,10 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
           <input type="month" className="month-select" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} />
         </div>
       </div>
+      
+      {/* 팝업창 */}
+      {modalData && <DetailModal title={modalTitle} data={modalData} onClose={() => setModalData(null)} />}
+
       <div className="kpi-grid">
         <div className="kpi-card"><div className="kpi-label">이번 달 총 접수</div><div className="kpi-value">{data.total}건</div><div className="kpi-sub trend-up">순수 예약</div></div>
         <div className="kpi-card"><div className="kpi-label">Airbnb 접수</div><div className="kpi-value" style={{ color: '#FF5A5F' }}>{data.platforms[0]?.value}건</div></div>
@@ -283,8 +353,23 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
                     return (
                       <tr key={room}>
                         <td className="text-left" style={{ fontWeight: '600' }}>{room}</td>
-                        <td><span className="pf-text-airbnb">{rData.airbnb}</span></td>
-                        <td><span className="pf-text-booking">{rData.booking}</span></td>
+                        {/* ★ 클릭하면 팝업 뜨게 수정됨 */}
+                        <td>
+                          <span 
+                            className={rData.airbnb > 0 ? "pf-text-airbnb clickable-number" : "pf-text-airbnb"}
+                            onClick={() => handleNumberClick(`${building} ${room} - Airbnb 내역`, rData.airbnbList)}
+                          >
+                            {rData.airbnb}
+                          </span>
+                        </td>
+                        <td>
+                          <span 
+                            className={rData.booking > 0 ? "pf-text-booking clickable-number" : "pf-text-booking"}
+                            onClick={() => handleNumberClick(`${building} ${room} - Booking 내역`, rData.bookingList)}
+                          >
+                            {rData.booking}
+                          </span>
+                        </td>
                         <td><strong>{rData.total}</strong></td>
                         <td>{share}%</td>
                       </tr>
@@ -488,12 +573,10 @@ function CancellationDashboard({ targetMonth, setTargetMonth }) {
   );
 }
 
-// 4. 기록 관리 리스트 (검색 필터 기능 추가)
+// 4. 기록 관리 리스트
 function RecordList({ targetMonth, setTargetMonth }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  
-  // ★ 검색용 상태 추가
   const [selectedBuilding, setSelectedBuilding] = useState("전체");
   const [selectedRoom, setSelectedRoom] = useState("전체");
 
@@ -513,11 +596,8 @@ function RecordList({ targetMonth, setTargetMonth }) {
 
   const handleDelete = async (id) => { if (window.confirm("삭제하시겠습니까?")) { await deleteDoc(doc(db, "reservations", id)); fetchRecords(); } };
 
-  // ★ 필터링 로직 적용
   const filteredRecords = records.filter((res) => {
-    // 1. 건물 필터
     if (selectedBuilding !== "전체" && res.building !== selectedBuilding) return false;
-    // 2. 객실 필터
     if (selectedRoom !== "전체" && res.room !== selectedRoom) return false;
     return true;
   });
@@ -527,20 +607,18 @@ function RecordList({ targetMonth, setTargetMonth }) {
       <div className="dashboard-header">
         <h2 className="page-title">전체 기록 관리</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* 건물 선택 */}
           <select 
             className="month-select" 
             value={selectedBuilding} 
             onChange={(e) => {
               setSelectedBuilding(e.target.value);
-              setSelectedRoom("전체"); // 건물 바꾸면 객실 초기화
+              setSelectedRoom("전체");
             }}
           >
             <option value="전체">전체 건물</option>
             {Object.keys(BUILDING_DATA).map(b => <option key={b} value={b}>{b}</option>)}
           </select>
 
-          {/* 객실 선택 (건물 선택 시에만 활성화) */}
           {selectedBuilding !== "전체" && (
             <select 
               className="month-select" 
@@ -583,7 +661,7 @@ function RecordList({ targetMonth, setTargetMonth }) {
 // 5. 입력 화면들
 function AddReservation({ initialMonth }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [stayMonth, setStayMonth] = useState(initialMonth); // ★ 대시보드에서 보던 달이 기본값
+  const [stayMonth, setStayMonth] = useState(initialMonth);
   const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
   const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
   const [platform, setPlatform] = useState('Airbnb');
@@ -624,7 +702,7 @@ function AddReservation({ initialMonth }) {
 
 function AddCancellation({ initialMonth }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [stayMonth, setStayMonth] = useState(initialMonth); // ★ 대시보드에서 보던 달이 기본값
+  const [stayMonth, setStayMonth] = useState(initialMonth);
   const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
   const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
   const [platform, setPlatform] = useState('Airbnb');
@@ -665,7 +743,6 @@ function AddCancellation({ initialMonth }) {
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // ★ 조회 월(Month) 상태를 앱 전체에서 공유 (사라짐 현상 방지)
   const [globalMonth, setGlobalMonth] = useState(new Date().toISOString().slice(0, 7));
 
   useEffect(() => { const unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); }); return () => unsubscribe(); }, []);
@@ -680,13 +757,11 @@ function App() {
           <Sidebar />
           <main className="main-content">
             <Routes>
-              {/* 각 페이지에 globalMonth 전달 */}
               <Route path="/" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/cancellations" element={<CancellationDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/list" element={<RecordList targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
 
-              {/* 입력 페이지에 초기값으로 전달 */}
               <Route path="/add" element={<AddReservation initialMonth={globalMonth} />} />
               <Route path="/add-cancel" element={<AddCancellation initialMonth={globalMonth} />} />
             </Routes>

@@ -51,38 +51,23 @@ function getStandardRoomName(roomId, rawRoomName) {
   return rawRoomName || `Room(${roomId})`;
 }
 
-// 데이터 청소 함수
 const cleanPrice = (val) => {
   if (!val) return 0;
   const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
   return isNaN(num) ? 0 : num;
 };
 
-// ★ [핵심] 예약일 결정 로직 (결제일 추가!)
+// 예약일 결정 로직
 const determineDate = (b) => {
-  // 1순위: 예약 시간
   if (b.bookTime && b.bookTime.length >= 10) return b.bookTime.slice(0, 10);
-  
-  // 2순위: 시스템 입력 시간
   if (b.entryTime && b.entryTime.length >= 10) return b.entryTime.slice(0, 10);
-  
-  // 3순위 (New): 인보이스(결제) 날짜 중 가장 빠른 날
-  // "결제한 고객"을 찾기 위한 결정적 힌트
   if (b.invoiceItems && Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0) {
-    // 날짜가 있는 항목만 골라서 정렬
     const validDates = b.invoiceItems
         .map(item => item.invoiceDate)
         .filter(d => d && d.length >= 10)
-        .sort(); // 오름차순 정렬 (가장 옛날 날짜가 맨 앞)
-    
-    if (validDates.length > 0) {
-        return validDates[0]; // 최초 결제일 리턴
-    }
+        .sort();
+    if (validDates.length > 0) return validDates[0];
   }
-
-  // 4순위: 최후의 수단 (입실일) - 정말 아무것도 없을 때만 사용
-  if (b.firstNight) return b.firstNight; 
-  
   return null;
 };
 
@@ -95,7 +80,22 @@ const determinePlatform = (b) => {
   return "Airbnb";
 };
 
-// 동기화 범위: 2024.01 ~ 미래 2년
+// ==========================================
+// ★ [핵심] 상태값 필터링 함수 (엄격 모드)
+// ==========================================
+function determineStatus(b) {
+  const s = String(b.status);
+  
+  // 확정(Confirmed)으로 쳐주는 경우: 1(확정), 2(신규)
+  if (s === "1" || s === "2") {
+    return "confirmed";
+  }
+  
+  // 나머지는 전부 취소/제외 처리
+  // 0: 취소, 3: 문의(Request), -1: 방막음(Black)
+  return "cancelled";
+}
+
 async function fetchAllBookings() {
   const now = new Date();
   const arrivalFrom = "20240101"; 
@@ -117,7 +117,10 @@ async function fetchAllBookings() {
       if (Array.isArray(response.data)) bookings = response.data;
       else if (response.data && Array.isArray(response.data.bookings)) bookings = response.data.bookings;
       return bookings.map(b => ({ ...b, customBuildingName: prop.name }));
-    } catch (e) { return []; }
+    } catch (e) {
+      console.error(`❌ ${prop.name} 조회 실패:`, e.message);
+      return [];
+    }
   });
 
   const results = await Promise.all(promises);
@@ -139,17 +142,12 @@ async function saveToFirestore(allBookings) {
     }
 
     const platform = determinePlatform(b);
-    
-    // ★ 결제일 포함해서 날짜 결정
     const recordDate = determineDate(b);
+    
+    // ★ [수정] 깐깐한 상태값 판별 함수 사용
+    const status = determineStatus(b);
 
-    // ★ 상태값 정리
-    let status = "confirmed";
-    if (String(b.status) === "0" || String(b.status).toLowerCase() === "cancelled") {
-        status = "cancelled";
-    }
-
-    if (!recordDate) continue; // 날짜를 못 구하면 저장 안 함 (거의 없을 것임)
+    if (!recordDate) continue; 
 
     batch.set(docRef, {
       id: String(b.bookId),
@@ -158,7 +156,7 @@ async function saveToFirestore(allBookings) {
       building: b.customBuildingName,
       room: stdRoomName,
       platform: platform,
-      status: status,
+      status: status, // 깐깐하게 분류된 상태값 저장
       guestName: `${b.guestFirstName || ""} ${b.guestName || ""}`.trim(),
       price: price,
       currency: b.currency || "JPY",
@@ -184,7 +182,7 @@ exports.syncBeds24 = onRequest({ cors: true, timeoutSeconds: 300 }, async (req, 
     try {
       const allBookings = await fetchAllBookings();
       const count = await saveToFirestore(allBookings);
-      return res.json({ success: true, message: `동기화 완료! (결제일 로직 추가됨) 총 ${count}건 저장됨.`, count });
+      return res.json({ success: true, message: `동기화 완료! (엄격 필터 적용) 총 ${count}건 저장됨.`, count });
     } catch (error) {
       return res.status(500).json({ success: false, error: error.message });
     }
@@ -237,8 +235,9 @@ exports.getTodayArrivals = onRequest({ cors: true }, async (req, res) => {
             price = b.invoiceItems.reduce((sum, item) => sum + cleanPrice(item.amount), 0);
         }
         const platform = determinePlatform(b);
-        let status = "confirmed";
-        if (String(b.status) === "0" || String(b.status) === "cancelled") status = "cancelled";
+        
+        // ★ [수정] 입/퇴실 리스트에도 똑같은 엄격 필터 적용
+        const status = determineStatus(b);
 
         return {
           id: String(b.bookId),

@@ -1,7 +1,9 @@
+// src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
+import { getAuth } from "firebase/auth";
 
+// 사장님의 프로젝트 설정
 const firebaseConfig = {
   apiKey: "AIzaSyBHI6d4mDDBEIB77GVQj5Rz1EbMyPaCjgA",
   authDomain: "my-booking-app-3f0e7.firebaseapp.com",
@@ -12,9 +14,7 @@ const firebaseConfig = {
   measurementId: "G-KKNJ5P1KFD"
 };
 
-// 파이어베이스 초기화
+// 여기서 딱 한 번 초기화하고 내보냅니다.
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-// 데이터베이스 기능 내보내기
 export const db = getFirestore(app);
+export const auth = getAuth(app);

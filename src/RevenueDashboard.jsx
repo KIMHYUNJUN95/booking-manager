@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from "firebase/firestore";
-// ★ 중요: 직접 getFirestore() 하지 않고, firebase.js에서 가져옵니다.
 import { db } from './firebase'; 
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -21,7 +20,11 @@ const RevenueDashboard = () => {
   const fetchRevenueData = async () => {
     setLoading(true);
     
-    // 올해 데이터
+    // 1. 데이터 조회 범위 설정
+    // 월 걸침 예약을 고려하여, 앞뒤로 넉넉하게 가져온 뒤 JS에서 필터링합니다.
+    const lastYear = selectedYear - 1;
+    
+    // 올해 데이터 쿼리
     const qCurrent = query(
       collection(db, "reservations"),
       where("stayMonth", ">=", `${selectedYear}-01`),
@@ -29,8 +32,7 @@ const RevenueDashboard = () => {
       where("status", "==", "confirmed")
     );
 
-    // 작년 데이터
-    const lastYear = selectedYear - 1;
+    // 작년 데이터 쿼리
     const qLast = query(
       collection(db, "reservations"),
       where("stayMonth", ">=", `${lastYear}-01`),
@@ -41,65 +43,106 @@ const RevenueDashboard = () => {
     try {
         const [snapCurrent, snapLast] = await Promise.all([getDocs(qCurrent), getDocs(qLast)]);
         
-        const currentList = snapCurrent.docs.map(d => d.data());
-        const lastList = snapLast.docs.map(d => d.data());
+        const currentDocs = snapCurrent.docs.map(d => d.data());
+        const lastDocs = snapLast.docs.map(d => d.data());
+        
+        // 병합된 데이터 리스트 (작년 + 올해)
+        const allDocs = [...currentDocs, ...lastDocs];
 
-        // --- 데이터 가공 ---
+        // --- [Beds24 기준 핵심 로직: nights 배열 기반 집계] ---
+        
+        // 1. 초기화 (1월~12월)
         const monthlyMap = {};
         for(let i=1; i<=12; i++) {
-        const monthStr = String(i).padStart(2, '0');
-        monthlyMap[monthStr] = { month: `${i}월`, current: 0, last: 0 };
+          const monthKey = String(i).padStart(2, '0');
+          monthlyMap[monthKey] = { month: `${i}월`, current: 0, last: 0 };
         }
 
-        let currentTotal = 0;
-        currentList.forEach(item => {
-        if(item.stayMonth) {
-            const month = item.stayMonth.slice(5, 7);
-            const price = Number(item.price) || 0;
-            if (monthlyMap[month]) {
-            monthlyMap[month].current += price;
-            currentTotal += price;
+        // 집계 변수
+        let calcCurrentTotal = 0;
+        let calcLastTotal = 0;
+        const bMap = {}; // 건물별
+        const rMap = {}; // 객실별
+
+        // 2. 모든 예약 건을 순회
+        allDocs.forEach(doc => {
+          // nights 배열이 없으면(구버전 데이터) price를 사용, 있으면 nights 사용
+          // ★ 우리가 만든 Backend 코드는 무조건 nights를 생성하므로 정확함
+          if (doc.nights && Array.isArray(doc.nights) && doc.nights.length > 0) {
+            
+            doc.nights.forEach(night => {
+              // night.date 형태: "2024-12-25"
+              const nDate = night.date;
+              const nYear = parseInt(nDate.slice(0, 4));
+              const nMonth = nDate.slice(5, 7); // "12"
+              const amount = Number(night.amount) || 0;
+
+              // [올해 매출 처리]
+              if (nYear === selectedYear) {
+                if (monthlyMap[nMonth]) {
+                  monthlyMap[nMonth].current += amount;
+                  calcCurrentTotal += amount;
+                }
+
+                // 건물/객실 통계는 '올해' 것만 집계
+                const bName = doc.building || "Unknown";
+                const rName = doc.room || "Unknown";
+                
+                bMap[bName] = (bMap[bName] || 0) + amount;
+                if (!rMap[bName]) rMap[bName] = {};
+                rMap[bName][rName] = (rMap[bName][rName] || 0) + amount;
+              }
+
+              // [작년 매출 처리] (비교용)
+              if (nYear === lastYear) {
+                if (monthlyMap[nMonth]) {
+                  monthlyMap[nMonth].last += amount;
+                  calcLastTotal += amount;
+                }
+              }
+            });
+
+          } else {
+            // [Fallback] nights 배열이 없는 옛날 데이터 처리 (기존 로직 유지)
+            // stayMonth 기준으로 통째로 더함 (오차 발생 가능성 있음)
+            if (!doc.stayMonth) return;
+            const sYear = parseInt(doc.stayMonth.slice(0, 4));
+            const sMonth = doc.stayMonth.slice(5, 7);
+            const price = Number(doc.price) || 0;
+
+            if (sYear === selectedYear) {
+              if (monthlyMap[sMonth]) {
+                monthlyMap[sMonth].current += price;
+                calcCurrentTotal += price;
+              }
+              const bName = doc.building || "Unknown";
+              const rName = doc.room || "Unknown";
+              bMap[bName] = (bMap[bName] || 0) + price;
+              if (!rMap[bName]) rMap[bName] = {};
+              rMap[bName][rName] = (rMap[bName][rName] || 0) + price;
+            } else if (sYear === lastYear) {
+               if (monthlyMap[sMonth]) {
+                monthlyMap[sMonth].last += price;
+                calcLastTotal += price;
+              }
             }
-        }
+          }
         });
 
-        let lastTotal = 0;
-        lastList.forEach(item => {
-        if(item.stayMonth) {
-            const month = item.stayMonth.slice(5, 7);
-            const price = Number(item.price) || 0;
-            if (monthlyMap[month]) {
-            monthlyMap[month].last += price;
-            lastTotal += price;
-            }
-        }
-        });
-
+        // 3. 차트용 배열 변환
         const chartData = Object.values(monthlyMap);
 
-        const bMap = {};
-        const rMap = {};
-
-        currentList.forEach(item => {
-        const bName = item.building || "Unknown";
-        const rName = item.room || "Unknown";
-        const price = Number(item.price) || 0;
-
-        bMap[bName] = (bMap[bName] || 0) + price;
-
-        if (!rMap[bName]) rMap[bName] = {};
-        rMap[bName][rName] = (rMap[bName][rName] || 0) + price;
-        });
-
+        // 4. 건물별 랭킹 정렬
         const buildingChartData = Object.keys(bMap)
-        .map(key => ({ name: key, value: bMap[key] }))
-        .sort((a, b) => b.value - a.value);
+          .map(key => ({ name: key, value: bMap[key] }))
+          .sort((a, b) => b.value - a.value);
 
         setMonthlyData(chartData);
         setBuildingData(buildingChartData);
         setRoomData(rMap);
-        setTotalRevenue(currentTotal);
-        setLastYearRevenue(lastTotal);
+        setTotalRevenue(calcCurrentTotal);
+        setLastYearRevenue(calcLastTotal);
+
     } catch (error) {
         console.error("매출 데이터 로딩 실패:", error);
     } finally {
@@ -114,7 +157,7 @@ const RevenueDashboard = () => {
   return (
     <div className="dashboard-content">
       <div className="dashboard-header">
-        <h2 className="page-title" style={{ color: "#2E7D32" }}>💰 매출 대시보드</h2>
+        <h2 className="page-title" style={{ color: "#2E7D32" }}>💰 매출 대시보드 (Beds24 연동)</h2>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontWeight: "600", color: "#666" }}>조회 연도:</span>
           <select 
@@ -132,13 +175,17 @@ const RevenueDashboard = () => {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: "50px", color: "#999" }}>데이터 분석 중...</div>
+        <div style={{ textAlign: "center", padding: "50px", color: "#999" }}>
+           데이터 정밀 분석 중...<br/>
+           <span style={{fontSize: '12px'}}>(일별 매출 분배 계산 중)</span>
+        </div>
       ) : (
         <>
           <div className="kpi-grid">
             <div className="kpi-card" style={{ borderLeft: "5px solid #2E7D32" }}>
               <div className="kpi-label">{selectedYear}년 총 매출</div>
               <div className="kpi-value" style={{ color: "#2E7D32" }}>{formatCurrency(totalRevenue)}</div>
+              <div className="kpi-sub">Gross 매출 (박수별 분배 적용됨)</div>
             </div>
             
             <div className="kpi-card" style={{ borderLeft: "5px solid #999" }}>
@@ -166,6 +213,10 @@ const RevenueDashboard = () => {
                 <Line type="monotone" dataKey="last" name={`${selectedYear-1}년`} stroke="#999" strokeWidth={2} strokeDasharray="5 5" />
               </LineChart>
             </ResponsiveContainer>
+             
+
+[Image of line chart comparing revenue across months]
+
           </div>
 
           <div className="chart-card">

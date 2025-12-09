@@ -259,7 +259,7 @@ function DetailModal({ title, data, onClose }) {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div className="modal-date-label">접수일</div>
-                  <div>{item.date}</div>
+                  <div>{item.bookDate || item.date}</div>
                 </div>
               </div>
             ))
@@ -274,12 +274,12 @@ function DetailModal({ title, data, onClose }) {
 // 기록 수정 모달
 // ==============================
 function EditModal({ record, onClose, onSave }) {
-  const [date, setDate] = useState(record.date);
+  const [bookDate, setBookDate] = useState(record.date || record.bookDate);
   const [stayMonth, setStayMonth] = useState(record.stayMonth);
   const [platform, setPlatform] = useState(record.platform);
 
   const handleSave = () => {
-    onSave({ ...record, date, stayMonth, platform });
+    onSave({ ...record, bookDate, date: bookDate, stayMonth, platform });
   };
 
   return (
@@ -295,7 +295,7 @@ function EditModal({ record, onClose, onSave }) {
             {record.building} {record.room}
           </div>
           <label className="input-label">접수일</label>
-          <input className="input-field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input className="input-field" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
           <label className="input-label">숙박 월</label>
           <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} />
           <label className="input-label">플랫폼</label>
@@ -324,15 +324,16 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   const [modalTitle, setModalTitle] = useState("");
 
   const fetchData = async () => {
-    // 디버깅: 데이터가 제대로 오는지 확인
+    // date 기준으로 안전하게 조회
     console.log(`Fetching Dashboard: ${targetMonth}, ${viewMode}`);
     
     const q = query(
-      collection(db, "reservations"),
-      where("date", ">=", `${targetMonth}-01`),
-      where("date", "<=", `${targetMonth}-31`),
-      where("status", "==", viewMode)
-    );
+  collection(db, "reservations"),
+  where("bookDate", ">=", `${targetMonth}-01`),
+  where("bookDate", "<=", `${targetMonth}-31`),
+  where("status", "==", viewMode)
+);
+
 
     const snapshot = await getDocs(q);
     const reservations = snapshot.docs.map((doc) => doc.data());
@@ -359,7 +360,6 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
       total++;
       bCount[r.building] = (bCount[r.building] || 0) + 1;
 
-      // ★ 수정: 대소문자 무관하게 Booking 체크
       const platformName = r.platform ? r.platform.toLowerCase() : "";
       if (platformName.includes("booking")) {
          pCount.Booking++;
@@ -532,6 +532,7 @@ function OccupancyDashboard({ targetMonth, setTargetMonth }) {
   const [data, setData] = useState({ total: 0, buildings: [], platforms: [], roomStats: {}, okuboTotal: 0 });
 
   const fetchData = async () => {
+    // 숙박 현황은 'stayMonth' 기준
     const q = query(collection(db, "reservations"), where("stayMonth", "==", targetMonth), where("status", "==", "confirmed"));
     const snapshot = await getDocs(q);
     const reservations = snapshot.docs.map((doc) => doc.data());
@@ -554,7 +555,6 @@ function OccupancyDashboard({ targetMonth, setTargetMonth }) {
         bCount[r.building] = (bCount[r.building] || 0) + 1;
         rStats[r.building][r.room].total++;
         
-        // ★ 수정: 대소문자 무관하게 Booking 체크
         const platformName = r.platform ? r.platform.toLowerCase() : "";
         if (platformName.includes("booking")) {
           rStats[r.building][r.room].booking++;
@@ -651,7 +651,13 @@ function RecordList({ targetMonth, setTargetMonth }) {
 
   const fetchRecords = async () => {
     setLoading(true);
-    const q = query(collection(db, "reservations"), where("date", ">=", `${targetMonth}-01`), where("date", "<=", `${targetMonth}-31`), orderBy("date", "desc"));
+    // date 기준으로 조회 + 정렬
+    const q = query(
+      collection(db, "reservations"),
+      where("bookDate", ">=", `${targetMonth}-01`),
+      where("bookDate", "<=", `${targetMonth}-31`),
+      orderBy("date", "desc")
+    );
     const snapshot = await getDocs(q);
     setRecords(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     setLoading(false);
@@ -670,7 +676,8 @@ function RecordList({ targetMonth, setTargetMonth }) {
   const handleSaveEdit = async (updatedRecord) => {
     try {
       await updateDoc(doc(db, "reservations", updatedRecord.id), {
-        date: updatedRecord.date,
+        bookDate: updatedRecord.bookDate,
+        date: updatedRecord.bookDate,
         stayMonth: updatedRecord.stayMonth,
         platform: updatedRecord.platform
       });
@@ -729,7 +736,7 @@ function RecordList({ targetMonth, setTargetMonth }) {
           <tbody>
             {filteredRecords.map((res) => (
               <tr key={res.id}>
-                <td className="text-left">{res.date}</td>
+                <td className="text-left">{res.date || res.bookDate}</td>
                 <td className="text-left" style={{ fontWeight: "bold", color: "#5856D6" }}>{res.stayMonth}</td>
                 <td>{res.building} {res.room}</td>
                 <td><span className={res.platform === "Airbnb" ? "pf-text-airbnb" : "pf-text-booking"}>{res.platform}</span></td>
@@ -754,28 +761,62 @@ function RecordList({ targetMonth, setTargetMonth }) {
 // ➕ AddReservation — 예약 등록 (수기)
 // ==============================
 function AddReservation({ initialMonth }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bookDate, setBookDate] = useState(new Date().toISOString().slice(0, 10));
+  const [arrival, setArrival] = useState(new Date().toISOString().slice(0, 10)); // 체크인 날짜
   const [stayMonth, setStayMonth] = useState(initialMonth);
+  
   const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
   const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
-  const [platform, setPlatform] = useState("Airbnb");
+  const [platform, setPlatform] = useState("Direct");
   const [count, setCount] = useState(1);
+  
+  const [nightsCount, setNightsCount] = useState(1); // 박수
+  const [totalPrice, setTotalPrice] = useState(0);   // 총 금액
+  
   const [recentHistory, setRecentHistory] = useState([]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!window.confirm("저장하시겠습니까?")) return;
 
+    const nightsArr = [];
+    if (nightsCount > 0 && totalPrice > 0) {
+        const daily = Math.round(totalPrice / nightsCount);
+        const baseDate = new Date(arrival);
+        
+        for(let i=0; i<nightsCount; i++) {
+            const d = new Date(baseDate);
+            d.setDate(baseDate.getDate() + i);
+            nightsArr.push({
+                date: d.toISOString().slice(0, 10),
+                amount: daily
+            });
+        }
+    }
+
     try {
       const promises = [];
       for (let i = 0; i < count; i++) {
         promises.push(addDoc(collection(db, "reservations"), {
-          date, stayMonth, building: selectedBuilding, room: selectedRoom, platform, status: "confirmed", createdAt: new Date()
+          bookDate: bookDate,
+          date: bookDate,            // ← date도 같이 저장
+          stayMonth: stayMonth,
+          building: selectedBuilding, 
+          room: selectedRoom, 
+          platform: platform, 
+          status: "confirmed",
+          
+          arrival: arrival,
+          totalPrice: Number(totalPrice),
+          nights: nightsArr,
+          
+          createdAt: new Date()
         }));
       }
       await Promise.all(promises);
+      
       setRecentHistory((prev) => {
-        const newItem = { date, room: `${selectedBuilding} ${selectedRoom}`, platform, count };
+        const newItem = { date: bookDate, room: `${selectedBuilding} ${selectedRoom}`, platform, count };
         return [newItem, ...prev].slice(0, 5);
       });
       alert("완료!");
@@ -785,12 +826,33 @@ function AddReservation({ initialMonth }) {
   return (
     <div style={{ display: "flex", gap: "30px", height: "100%", alignItems: "flex-start" }}>
       <div className="form-wrapper" style={{ flex: 1 }}>
-        <h2 style={{ textAlign: "center", marginBottom: "30px" }}>새 예약 등록</h2>
+        <h2 style={{ textAlign: "center", marginBottom: "30px" }}>새 예약 등록 (수기)</h2>
         <form onSubmit={handleSubmit}>
-          <label className="input-label">접수일 (오늘 날짜)</label>
-          <input className="input-field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <label className="input-label">숙박 월 (체크인)</label>
-          <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} style={{ border: "2px solid #0071E3" }} />
+          <div style={{display:'flex', gap:'10px'}}>
+             <div style={{flex:1}}>
+                <label className="input-label">접수일 (예약 생성일)</label>
+                <input className="input-field" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
+             </div>
+             <div style={{flex:1}}>
+                <label className="input-label">숙박 월 (통계용)</label>
+                <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} style={{ border: "2px solid #0071E3" }} />
+             </div>
+          </div>
+          
+          <label className="input-label">체크인 날짜 (Arrival)</label>
+          <input className="input-field" type="date" value={arrival} onChange={(e) => setArrival(e.target.value)} required />
+
+          <div style={{display:'flex', gap:'10px'}}>
+            <div style={{flex:1}}>
+                <label className="input-label">총 박수 (Nights)</label>
+                <input className="input-field" type="number" min="1" value={nightsCount} onChange={(e) => setNightsCount(parseInt(e.target.value))} />
+            </div>
+            <div style={{flex:1}}>
+                <label className="input-label">총 금액 (Total Price)</label>
+                <input className="input-field" type="number" value={totalPrice} onChange={(e) => setTotalPrice(Number(e.target.value))} placeholder="엔화 금액" />
+            </div>
+          </div>
+
           <label className="input-label">건물</label>
           <select className="input-field" value={selectedBuilding} onChange={(e) => { setSelectedBuilding(e.target.value); setSelectedRoom(BUILDING_DATA[e.target.value][0]); }}>
             {Object.keys(BUILDING_DATA).map((b) => <option key={b} value={b}>{b}</option>)}
@@ -801,13 +863,13 @@ function AddReservation({ initialMonth }) {
           </select>
           <label className="input-label">플랫폼</label>
           <select className="input-field" value={platform} onChange={(e) => setPlatform(e.target.value)}>
+            <option value="Direct">직접 예약 (Direct)</option>
             <option value="Airbnb">Airbnb</option>
             <option value="Booking">Booking.com</option>
-            {/* ★ 추가됨: 직접 예약 */}
-            <option value="Direct">직접 예약 (Direct)</option>
           </select>
-          <label className="input-label">예약 건수 (동시)</label>
+          <label className="input-label">예약 건수 (동시 등록 시)</label>
           <input className="input-field" type="number" min="1" value={count} onChange={(e) => setCount(parseInt(e.target.value))} />
+          
           <button className="btn-primary" type="submit">저장하기</button>
         </form>
       </div>
@@ -831,7 +893,7 @@ function AddReservation({ initialMonth }) {
 // ❌ AddCancellation — 취소 기록 등록 (수기)
 // ==============================
 function AddCancellation({ initialMonth }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bookDate, setBookDate] = useState(new Date().toISOString().slice(0, 10));
   const [stayMonth, setStayMonth] = useState(initialMonth);
   const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
   const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
@@ -845,7 +907,15 @@ function AddCancellation({ initialMonth }) {
       const promises = [];
       for (let i = 0; i < count; i++) {
         promises.push(addDoc(collection(db, "reservations"), {
-          date, stayMonth, building: selectedBuilding, room: selectedRoom, platform, status: "cancelled", createdAt: new Date()
+          bookDate: bookDate,
+          date: bookDate,         // 취소도 date 저장
+          cancelDate: bookDate,
+          stayMonth, 
+          building: selectedBuilding, 
+          room: selectedRoom, 
+          platform, 
+          status: "cancelled", 
+          createdAt: new Date()
         }));
       }
       await Promise.all(promises);
@@ -859,7 +929,7 @@ function AddCancellation({ initialMonth }) {
         <h2 style={{ textAlign: "center", marginBottom: "30px", color: "#FF3B30" }}>취소 기록 등록</h2>
         <form onSubmit={handleSubmit}>
           <label className="input-label">취소 접수일</label>
-          <input className="input-field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input className="input-field" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
           <label className="input-label">취소된 예약의 숙박 월</label>
           <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} style={{ border: "2px solid #FF3B30" }} />
           <label className="input-label">건물</label>
@@ -874,7 +944,6 @@ function AddCancellation({ initialMonth }) {
           <select className="input-field" value={platform} onChange={(e) => setPlatform(e.target.value)}>
             <option value="Airbnb">Airbnb</option>
             <option value="Booking">Booking.com</option>
-            {/* ★ 추가됨: 직접 예약 */}
             <option value="Direct">직접 예약 (Direct)</option>
           </select>
           <label className="input-label">취소 건수</label>
@@ -887,7 +956,7 @@ function AddCancellation({ initialMonth }) {
 }
 
 // ==============================
-// 🚪 ArrivalsDashboard (입/퇴실 대시보드 - 최종 개선)
+// 🚪 ArrivalsDashboard (입/퇴실 대시보드)
 // ==============================
 function ArrivalsDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
@@ -895,20 +964,17 @@ function ArrivalsDashboard() {
   const [guestList, setGuestList] = useState([]); 
   const [error, setError] = useState("");
 
-  // ★ 금액 포맷팅 ("청소부" 함수)
   const formatPrice = (price) => {
     if (!price) return "¥0";
-    // 쉼표나 글자를 다 지우고 숫자(.)만 남기는 강력한 청소 코드
     const num = parseFloat(String(price).replace(/[^0-9.-]+/g,""));
-    if (isNaN(num)) return "¥0"; // 청소했는데도 숫자가 아니면 0원 처리
+    if (isNaN(num)) return "¥0";
     return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(num);
   };
 
-  // ★ 플랫폼 색상 처리 ("Booking.com" 자동 인식)
   const getPlatformClass = (platformName) => {
     if (!platformName) return "pf-text-airbnb";
     const name = platformName.toLowerCase();
-    if (name.includes("booking")) return "pf-text-booking"; // "booking" 글자만 있으면 파란색
+    if (name.includes("booking")) return "pf-text-booking";
     return "pf-text-airbnb";
   };
 
@@ -916,7 +982,6 @@ function ArrivalsDashboard() {
     setLoading(true);
     setError("");
     try {
-      // 서버에 날짜 전달
       const response = await fetch(GET_ARRIVALS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -939,7 +1004,6 @@ function ArrivalsDashboard() {
     }
   };
 
-  // ★ 날짜 변경 시 자동 fetch (새로고침 버튼 안 눌러도 됨)
   useEffect(() => {
     fetchTodayArrivals();
   }, [selectedDate]);
@@ -981,7 +1045,7 @@ function ArrivalsDashboard() {
                       <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
                       <td style={{ fontSize: "13px", color: "#666" }}>{g.arrival} ~ {g.departure}</td>
-                      <td style={{ fontWeight: "bold" }}>{formatPrice(g.price)}</td>
+                      <td style={{ fontWeight: "bold" }}>{formatPrice(g.totalPrice || g.price)}</td>
                       <td><span className="tag-good">입실예정</span></td>
                     </tr>
                   ))}
@@ -1007,7 +1071,7 @@ function ArrivalsDashboard() {
                       <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
                       <td style={{ color: "#0071E3", fontWeight: "600" }}>{g.arrival} (입실일)</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
-                      <td>{formatPrice(g.price)}</td>
+                      <td>{formatPrice(g.totalPrice || g.price)}</td>
                       <td><span className="tag-pending">퇴실대기</span></td>
                     </tr>
                   ))}

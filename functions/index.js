@@ -1,262 +1,205 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const axios = require("axios");
-const cors = require("cors")({ origin: true });
 const admin = require("firebase-admin");
+const dayjs = require("dayjs");
+const cors = require("cors")({ origin: true });
 
 admin.initializeApp();
 const db = admin.firestore();
 
 // ==========================================
-// ▼ Beds24 설정
+// 1) CONSTANTS & MAPPING (사용자 정보 포함)
 // ==========================================
 const BEDS24_API_KEY = "9378AnbjfrIDo3j9MmrQZjwKd";
-
 const PROPERTIES = [
-  { name: "아라키초A", id: "NSoH37aJMipHA4K4MPVyp2pnq" },
-  { name: "아라키초B", id: "AV3yKzD2gFz4OmNdlv4qANoQc" },
-  { name: "다이쿄초", id: "CXNtlpJnRuKJDPrTpqOaa3yws" },
-  { name: "가부키초", id: "3ldwEucRNOIyhAdAhFWbBhw3e" },
-  { name: "다카다노바바", id: "8Nx8VcOYwSYVAwG01xkokmsX7" },
-  { name: "오쿠보A동", id: "dJQloWov7XuXMUmSXyVsLP8LR" },
-  { name: "오쿠보B동", id: "WbtREQENBg6aIR0pgEIympSAv" },
-  { name: "오쿠보C동", id: "MXP5jJXp2mPxVhjdTAF0KnHTP" },
-  { name: "사노시", id: "gDzuVIkyvm5fqtuifdveeIKZO" }
+    { name: "아라키초A", id: "NSoH37aJMipHA4K4MPVyp2pnq" },
+    { name: "아라키초B", id: "AV3yKzD2gFz4OmNdlv4qANoQc" },
+    { name: "다이쿄초", id: "CXNtlpJnRuKJDPrTpqOaa3yws" },
+    { name: "가부키초", id: "3ldwEucRNOIyhAdAhFWbBhw3e" },
+    { name: "다카다노바바", id: "8Nx8VcOYwSYVAwG01xkokmsX7" },
+    { name: "오쿠보A동", id: "dJQloWov7XuXMUmSXyVsLP8LR" },
+    { name: "오쿠보B동", id: "WbtREQENBg6aIR0pgEIympSAv" },
+    { name: "오쿠보C동", id: "MXP5jJXp2mPxVhjdTAF0KnHTP" },
+    { name: "사노시", id: "gDzuVIkyvm5fqtuifdveeIKZO" }
 ];
 
-const ROOM_MAPPING = {
-  "383971": "201호", "601545": "201호", "403542": "202호", "601546": "202호",
-  "383972": "301호", "601547": "301호", "383978": "302호", "601548": "302호",
-  "440617": "401호", "515300": "401호", "383974": "402호", "601549": "402호",
-  "502229": "501호", "383975": "501호", "383976": "502호", "601550": "502호",
-  "537451": "602호", "601551": "602호", "383973": "701호", "601552": "701호",
-  "383977": "702호", "601553": "702호",
-  "585734": "101호", "585738": "102호", "585735": "201호", "585739": "202호",
-  "585736": "301호", "585740": "302호", "585737": "401호", "585741": "402호",
-  "440619": "B01호", "440620": "B02호", "440621": "101호", "440622": "102호",
-  "440623": "201호", "440624": "202호", "440625": "302호",
-  "383979": "202호", "451220": "202호", "383980": "203호", "452061": "203호",
-  "383981": "302호", "452062": "302호", "383982": "303호", "451223": "303호",
-  "383983": "402호", "451224": "402호", "383984": "403호", "452063": "403호",
-  "543189": "502호", "601560": "502호", "383985": "603호", "452064": "603호",
-  "441885": "802호", "452065": "802호", "624198": "803호",
-  "437952": "오쿠보A", "615969": "오쿠보B", "450096": "오쿠보C", "496532": "오쿠보C",
-  "481152": "사노",
-  "513698": "201호", "513699": "301호", "513700": "401호", "556719": "401호",
-  "513701": "501호", "513702": "601호", "513703": "701호", "513704": "801호", "513705": "901호"
-};
-
-function getStandardRoomName(roomId, rawRoomName) {
-  if (ROOM_MAPPING[roomId]) return ROOM_MAPPING[roomId];
-  return rawRoomName || `Room(${roomId})`;
-}
-
-const cleanPrice = (val) => {
-  if (!val) return 0;
-  const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
-  return isNaN(num) ? 0 : num;
-};
-
-// 예약일 결정 로직
-const determineDate = (b) => {
-  if (b.bookTime && b.bookTime.length >= 10) return b.bookTime.slice(0, 10);
-  if (b.entryTime && b.entryTime.length >= 10) return b.entryTime.slice(0, 10);
-  if (b.invoiceItems && Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0) {
-    const validDates = b.invoiceItems
-        .map(item => item.invoiceDate)
-        .filter(d => d && d.length >= 10)
-        .sort();
-    if (validDates.length > 0) return validDates[0];
-  }
-  return null;
-};
-
-const determinePlatform = (b) => {
-  const source = [b.referer, b.referrer, b.apiSource, b.subSource].join(" ").toLowerCase();
-  if (source.includes("booking")) return "Booking";
-  if (source.includes("airbnb")) return "Airbnb";
-  if (source.includes("expedia")) return "Expedia";
-  if (source.includes("agoda")) return "Agoda";
-  return "Airbnb";
-};
-
-// ==========================================
-// ★ [핵심] 상태값 필터링 함수 (엄격 모드)
-// ==========================================
-function determineStatus(b) {
-  const s = String(b.status);
-  
-  // 확정(Confirmed)으로 쳐주는 경우: 1(확정), 2(신규)
-  if (s === "1" || s === "2") {
-    return "confirmed";
-  }
-  
-  // 나머지는 전부 취소/제외 처리
-  // 0: 취소, 3: 문의(Request), -1: 방막음(Black)
-  return "cancelled";
-}
-
-async function fetchAllBookings() {
-  const now = new Date();
-  const arrivalFrom = "20240101"; 
-  const futureDate = new Date(now);
-  futureDate.setMonth(now.getMonth() + 24); 
-  const arrivalTo = futureDate.toISOString().slice(0, 10).replace(/-/g, "");
-
-  console.log(`🚀 동기화 범위: ${arrivalFrom} ~ ${arrivalTo}`);
-
-  const promises = PROPERTIES.map(async (prop) => {
-    const payload = {
-      authentication: { apiKey: BEDS24_API_KEY, propKey: prop.id },
-      arrivalFrom, arrivalTo,
-      includeInfo: true, includeGuests: true, includeInvoice: true
+function getStandardRoomName(roomId, rawName) {
+    const ROOM_MAPPING = {
+        "383971": "201호", "601545": "201호", "403542": "202호", "601546": "202호",
+        "383972": "301호", "601547": "301호", "383978": "302호", "601548": "302호",
+        "440617": "401호", "515300": "401호", "383974": "402호", "601549": "402호",
+        "502229": "501호", "383975": "501호", "383976": "502호", "601550": "502호",
+        "537451": "602호", "601551": "602호", "383973": "701호", "601552": "701호",
+        "383977": "702호", "601553": "702호",
+        "585734": "101호", "585738": "102호", "585735": "201호", "585739": "202호",
+        "585736": "301호", "585740": "302호", "585737": "401호", "585741": "402호",
+        "440619": "B01호", "440620": "B02호", "440621": "101호", "440622": "102호",
+        "440623": "201호", "440624": "202호", "440625": "302호",
+        "383979": "202호", "451220": "202호", "383980": "203호", "452061": "203호",
+        "383981": "302호", "452062": "302호", "383982": "303호", "451223": "303호",
+        "383983": "402호", "451224": "402호", "383984": "403호", "452063": "403호",
+        "543189": "502호", "601560": "502호", "383985": "603호", "452064": "603호",
+        "441885": "802호", "452065": "802호", "624198": "803호",
+        "437952": "오쿠보A", "615969": "오쿠보B", "450096": "오쿠보C", "496532": "오쿠보C",
+        "481152": "사노",
+        "513698": "201호", "513699": "301호", "513700": "401호", "556719": "401호",
+        "513701": "501호", "513702": "601호", "513703": "701호", "513704": "801호", "513705": "901호"
     };
-    try {
-      const response = await axios.post("https://api.beds24.com/json/getBookings", payload);
-      let bookings = [];
-      if (Array.isArray(response.data)) bookings = response.data;
-      else if (response.data && Array.isArray(response.data.bookings)) bookings = response.data.bookings;
-      return bookings.map(b => ({ ...b, customBuildingName: prop.name }));
-    } catch (e) {
-      console.error(`❌ ${prop.name} 조회 실패:`, e.message);
-      return [];
-    }
-  });
+    return ROOM_MAPPING[roomId] || rawName || `Room(${roomId})`;
+}
+const cleanPrice = (val) => {
+    if (!val) return 0;
+    const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
+    return isNaN(num) ? 0 : num;
+};
+const determineStatus = (b) => {
+    const s = String(b.status);
+    if (s === "1" || s === "2") { return "confirmed"; }
+    return "cancelled";
+};
 
-  const results = await Promise.all(promises);
-  return results.flat();
+// ==========================================
+// 2) HELPER: DATE LOGIC (bookingTime 우선순위 적용)
+// ==========================================
+const determineDate = (b) => {
+    // 1순위: [최종 발견 필드] bookingTime 사용 (가장 정확한 예약 접수일)
+    if (b.bookingTime && b.bookingTime.length >= 10) return b.bookingTime.slice(0, 10);
+    
+    // 2순위: bookTime
+    if (b.bookTime && b.bookTime.length >= 10) return b.bookTime.slice(0, 10);
+    
+    // 3순위: entryTime
+    if (b.entryTime && b.entryTime.length >= 10) return b.entryTime.slice(0, 10);
+    
+    // 4순위: invoiceDate (결제일)
+    if (b.invoiceItems && Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0) {
+        const validDates = b.invoiceItems
+            .map(item => item.invoiceDate)
+            .filter(d => d && d.length >= 10)
+            .sort();
+        if (validDates.length > 0) return validDates[0].slice(0, 10);
+    }
+    
+    // ★ 입실일(firstNight)은 사용하지 않음 (뻥튀기 영구 방지)
+    return null;
+};
+
+// ==========================================
+// 3) NORMALIZE & FETCH (Normal Sync)
+// ==========================================
+function normalize(b, propKey, building) {
+    const status = determineStatus(b);
+    const bookDateStr = determineDate(b);
+    
+    const arrival = b.firstNight ? b.firstNight.slice(0, 10) : null;
+    const departure = b.lastNight ? b.lastNight.slice(0, 10) : null;
+    const stayMonth = arrival ? arrival.slice(0, 7) : null;
+
+    const date = bookDateStr; // 대시보드 쿼리 필드 (정확한 예약 접수일)
+
+    const allSources = [b.referer, b.referrer, b.apiSource, b.subSource, b.source, b.channel].join(" ").toLowerCase();
+    let platform = "Airbnb";
+    if (allSources.includes("booking")) platform = "Booking";
+    else if (allSources.includes("expedia")) platform = "Expedia";
+    else if (allSources.includes("agoda")) platform = "Agoda";
+
+    let totalPrice = 0;
+    if (Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0) {
+        totalPrice = b.invoiceItems.reduce((s, x) => s + cleanPrice(x.amount || 0), 0);
+    } else if (b.price) {
+        totalPrice = cleanPrice(b.price);
+    } else if (b.amount) {
+        totalPrice = cleanPrice(b.amount);
+    }
+    const nights = (arrival && departure) ? dayjs(departure).diff(dayjs(arrival), "day") : 0;
+
+    return {
+        id: String(b.bookId), bookId: String(b.bookId), propKey, roomId: String(b.roomId), room: getStandardRoomName(String(b.roomId), b.roomName),
+        building, guestName: `${b.guestFirstName || ""} ${b.guestName || ""}`.trim(),
+        status, rawStatus: String(b.status), platform,
+        date, price: totalPrice, nights,
+        bookDate: bookDateStr, arrival, departure, stayMonth, totalPrice,
+        updatedAt: new Date(),
+    };
 }
 
-async function saveToFirestore(allBookings) {
-  let batch = db.batch();
-  let batchCount = 0;
-  let totalCount = 0;
+async function fetchFromBeds24() {
+    const arrivalFrom = "20240101";
+    const arrivalTo = dayjs().add(24, "month").format("YYYYMMDD"); 
 
-  for (const b of allBookings) {
-    const docRef = db.collection("reservations").doc(String(b.bookId));
-    const stdRoomName = getStandardRoomName(String(b.roomId), b.roomName);
+    const tasks = PROPERTIES.map(async (prop) => {
+        try {
+            const res = await axios.post("https://api.beds24.com/json/getBookings", {
+                authentication: { apiKey: BEDS24_API_KEY, propKey: prop.id },
+                arrivalFrom, arrivalTo, includeInfo: true, includeGuests: true, includeInvoice: true
+            });
+            const arr = Array.isArray(res.data) ? res.data : res.data.bookings || [];
+            return arr.map((b) => normalize(b, prop.id, prop.name));
+        } catch (err) {
+            console.error("❌ Fetch Error:", prop.name, err.message);
+            return [];
+        }
+    });
+    return (await Promise.all(tasks)).flat();
+}
 
-    let price = cleanPrice(b.price);
-    if (price === 0 && b.invoiceItems && Array.isArray(b.invoiceItems)) {
-        price = b.invoiceItems.reduce((sum, item) => sum + cleanPrice(item.amount), 0);
+async function saveBookings(list) {
+    const batchLimit = 400;
+    let batch = db.batch();
+    let count = 0;
+
+    for (const item of list) {
+        // [0건 방지] 날짜가 null이더라도 저장을 스킵하지 않음
+        const docRef = db.collection("reservations").doc(item.id);
+        batch.set(docRef, item, { merge: true });
+
+        count++;
+        if (count % batchLimit === 0) {
+            await batch.commit();
+            batch = db.batch();
+        }
     }
+    if (count % batchLimit !== 0) { await batch.commit(); }
+    return count;
+}
 
-    const platform = determinePlatform(b);
-    const recordDate = determineDate(b);
-    
-    // ★ [수정] 깐깐한 상태값 판별 함수 사용
-    const status = determineStatus(b);
 
-    if (!recordDate) continue; 
+// ==========================================
+// 4) EXPORTS
+// ==========================================
 
-    batch.set(docRef, {
-      id: String(b.bookId),
-      date: recordDate, 
-      stayMonth: b.firstNight?.slice(0, 7) ?? null,
-      building: b.customBuildingName,
-      room: stdRoomName,
-      platform: platform,
-      status: status, // 깐깐하게 분류된 상태값 저장
-      guestName: `${b.guestFirstName || ""} ${b.guestName || ""}`.trim(),
-      price: price,
-      currency: b.currency || "JPY",
-      updatedAt: new Date()
+// 일반 동기화 (메모리 증설 적용)
+exports.syncBeds24 = onRequest({ cors: true, timeoutSeconds: 540, memory: '512MiB' }, async (req, res) => {
+    try {
+        const list = await fetchFromBeds24();
+        const count = await saveBookings(list);
+        res.json({ success: true, message: `동기화 완료! ${count}건 저장됨.`, count });
+    } catch (e) {
+        console.error("Sync Failed:", e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// 스케줄러 (자동 동기화)
+exports.scheduledBeds24Sync = onSchedule("every 30 minutes", async () => {
+    const list = await fetchFromBeds24();
+    await saveBookings(list);
+});
+
+// 입/퇴실 조회
+exports.getTodayArrivals = onRequest({ cors: true }, async (req, res) => {
+    const date = req.body.date || dayjs().format("YYYY-MM-DD");
+
+    const snap = await db.collection("reservations")
+        .where("status", "==", "confirmed")
+        .get();
+
+    const list = [];
+    snap.forEach((d) => {
+        const x = d.data();
+        if (x.arrival === date || x.departure === date) list.push(x);
     });
 
-    batchCount++;
-    totalCount++;
-
-    if (batchCount >= 400) {
-      await batch.commit();
-      batch = db.batch();
-      batchCount = 0;
-    }
-  }
-
-  if (batchCount > 0) await batch.commit();
-  return totalCount;
-}
-
-exports.syncBeds24 = onRequest({ cors: true, timeoutSeconds: 300 }, async (req, res) => {
-  cors(req, res, async () => {
-    try {
-      const allBookings = await fetchAllBookings();
-      const count = await saveToFirestore(allBookings);
-      return res.json({ success: true, message: `동기화 완료! (엄격 필터 적용) 총 ${count}건 저장됨.`, count });
-    } catch (error) {
-      return res.status(500).json({ success: false, error: error.message });
-    }
-  });
-});
-
-exports.scheduledBeds24Sync = onSchedule("every 30 minutes", async (event) => {
-  try {
-    const allBookings = await fetchAllBookings();
-    await saveToFirestore(allBookings);
-    console.log("⏰ 스케줄러 완료");
-  } catch (error) { console.error(error); }
-});
-
-exports.getTodayArrivals = onRequest({ cors: true }, async (req, res) => {
-  cors(req, res, async () => {
-    try {
-      const now = new Date();
-      const startDate = new Date(now); startDate.setDate(now.getDate() - 30);
-      const endDate = new Date(now); endDate.setDate(now.getDate() + 30);
-      const arrivalFrom = startDate.toISOString().slice(0, 10).replace(/-/g, "");
-      const arrivalTo = endDate.toISOString().slice(0, 10).replace(/-/g, "");
-
-      const promises = PROPERTIES.map(async (prop) => {
-        const payload = {
-          authentication: { apiKey: BEDS24_API_KEY, propKey: prop.id },
-          arrivalFrom, arrivalTo,
-          includeInfo: true, includeGuests: true, includeInvoice: true
-        };
-        try {
-          const response = await axios.post("https://api.beds24.com/json/getBookings", payload);
-          let bookings = [];
-          if (Array.isArray(response.data)) bookings = response.data;
-          else if (response.data && Array.isArray(response.data.bookings)) bookings = response.data.bookings;
-          return bookings.map(b => ({ ...b, customBuildingName: prop.name }));
-        } catch (e) { return []; }
-      });
-
-      const results = await Promise.all(promises);
-      const allBookings = results.flat();
-
-      const finalResult = allBookings.map(b => {
-        let guestName = "이름없음";
-        if (b.guestFirstName || b.guestName) {
-           guestName = [(b.guestFirstName || ""), (b.guestName || "")].join(" ").trim();
-        }
-        const stdRoomName = getStandardRoomName(String(b.roomId), b.roomName);
-        let price = cleanPrice(b.price);
-        if (price === 0 && b.invoiceItems && Array.isArray(b.invoiceItems)) {
-            price = b.invoiceItems.reduce((sum, item) => sum + cleanPrice(item.amount), 0);
-        }
-        const platform = determinePlatform(b);
-        
-        // ★ [수정] 입/퇴실 리스트에도 똑같은 엄격 필터 적용
-        const status = determineStatus(b);
-
-        return {
-          id: String(b.bookId),
-          bookId: String(b.bookId),
-          guestName: guestName,
-          arrival: b.firstNight,
-          departure: b.lastNight,
-          date: determineDate(b),
-          stayMonth: b.firstNight ? b.firstNight.slice(0, 7) : "",
-          building: b.customBuildingName, 
-          room: stdRoomName,
-          platform: platform,
-          price: price,
-          status: status
-        };
-      });
-      return res.json({ success: true, count: finalResult.length, data: finalResult });
-    } catch (err) {
-      return res.status(500).json({ success: false, error: err.message });
-    }
-  });
+    res.json({ success: true, data: list });
 });

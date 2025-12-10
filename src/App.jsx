@@ -5,8 +5,9 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebas
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // ★ 핵심: firebase.js 에서 db, auth 가져오기
-import { db, auth } from './firebase'; 
+import { db, auth } from './firebase';
 import RevenueDashboard from './RevenueDashboard.jsx';
+import CleaningDashboard from './components/CleaningDashboard.jsx';
 
 // ★★★ 서버 주소 ★★★
 const GET_ARRIVALS_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/getTodayArrivals";
@@ -185,12 +186,13 @@ function Sidebar({ onSync }) {
 
   const menu = [
     { path: "/", label: "예약 접수 대시보드", icon: "📊" },
-    { path: "/revenue", label: "매출 대시보드", icon: "💰" }, 
+    { path: "/revenue", label: "매출 대시보드", icon: "💰" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
     { path: "/list", label: "전체 기록 관리", icon: "📋" },
     { path: "/add", label: "예약 입력", icon: "➕" },
     { path: "/add-cancel", label: "취소 입력", icon: "❌" },
-    { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" }, 
+    { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
+    { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
   ];
 
   const logout = () => {
@@ -1162,6 +1164,7 @@ function App() {
               <Route path="/add" element={<AddReservation initialMonth={globalMonth} />} />
               <Route path="/add-cancel" element={<AddCancellation initialMonth={globalMonth} />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
+              <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>
           </main>
         </div>

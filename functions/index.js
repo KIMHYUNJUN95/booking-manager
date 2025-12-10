@@ -93,7 +93,8 @@ function normalize(b, propKey, building) {
     const bookDateStr = determineDate(b);
     
     const arrival = b.firstNight ? b.firstNight.slice(0, 10) : null;
-    const departure = b.lastNight ? b.lastNight.slice(0, 10) : null;
+    // ★ 퇴실일 = lastNight + 1일 (마지막 숙박일 다음날이 실제 체크아웃)
+    const departure = b.lastNight ? dayjs(b.lastNight).add(1, 'day').format('YYYY-MM-DD') : null;
     const stayMonth = arrival ? arrival.slice(0, 7) : null;
 
     const date = bookDateStr; // 대시보드 쿼리 필드 (정확한 예약 접수일)

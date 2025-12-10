@@ -958,10 +958,28 @@ function AddCancellation({ initialMonth }) {
 // ==============================
 // 🚪 ArrivalsDashboard (입/퇴실 대시보드)
 // ==============================
+// 건물 정렬 순서 정의
+const BUILDING_ORDER = [
+  "아라키초A", "아라키초B", "다이쿄초", "가부키초",
+  "다카다노바바", "오쿠보A동", "오쿠보B동", "오쿠보C동"
+];
+
+// 건물 순서대로 정렬하는 함수
+const sortByBuildingOrder = (list) => {
+  return [...list].sort((a, b) => {
+    const indexA = BUILDING_ORDER.indexOf(a.building);
+    const indexB = BUILDING_ORDER.indexOf(b.building);
+    // 목록에 없는 건물은 맨 뒤로
+    const orderA = indexA === -1 ? 999 : indexA;
+    const orderB = indexB === -1 ? 999 : indexB;
+    return orderA - orderB;
+  });
+};
+
 function ArrivalsDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [loading, setLoading] = useState(false); 
-  const [guestList, setGuestList] = useState([]); 
+  const [loading, setLoading] = useState(false);
+  const [guestList, setGuestList] = useState([]);
   const [error, setError] = useState("");
 
   const formatPrice = (price) => {
@@ -1008,8 +1026,9 @@ function ArrivalsDashboard() {
     fetchTodayArrivals();
   }, [selectedDate]);
 
-  const todayArrivals = guestList.filter(guest => guest.arrival === selectedDate);
-  const todayDepartures = guestList.filter(guest => guest.departure === selectedDate);
+  // 선택한 날짜의 입실/퇴실 필터링 후 건물 순서대로 정렬
+  const todayArrivals = sortByBuildingOrder(guestList.filter(guest => guest.arrival === selectedDate));
+  const todayDepartures = sortByBuildingOrder(guestList.filter(guest => guest.departure === selectedDate));
 
   return (
     <div className="dashboard-content">

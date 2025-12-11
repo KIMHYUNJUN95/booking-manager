@@ -1,6 +1,6 @@
 // src/components/CleaningDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, doc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, setDoc, orderBy, limit } from "firebase/firestore";
 import { db } from '../firebase';
 
 // 기본 체크아웃/체크인 시간
@@ -76,14 +76,16 @@ const CleaningDashboard = () => {
       // 2. 각 퇴실 객실의 다음 입실 정보 조회
       const tasksWithNextCheckin = await Promise.all(
         departureList.map(async (res) => {
-          // 같은 객실의 다음 입실 예약 찾기
+          // 같은 객실의 다음 입실 예약 찾기 (선택한 날짜 이후 가장 가까운 예약)
           const nextCheckinSnap = await getDocs(
             query(
               collection(db, "reservations"),
               where("status", "==", "confirmed"),
               where("building", "==", res.building),
               where("room", "==", res.room),
-              where("arrival", "==", selectedDate)
+              where("arrival", ">=", selectedDate),
+              orderBy("arrival", "asc"),
+              limit(1)
             )
           );
 

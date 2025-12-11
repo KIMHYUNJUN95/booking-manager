@@ -1058,12 +1058,13 @@ function ArrivalsDashboard() {
               <p style={{ textAlign: "center", color: "#aaa", padding: "20px" }}>{selectedDate} 입실 예정자가 없습니다.</p>
             ) : (
               <table className="table-full">
-                <thead><tr><th>객실</th><th>게스트 이름</th><th>플랫폼</th><th>숙박 기간</th><th>총 금액</th><th>상태</th></tr></thead>
+                <thead><tr><th>객실</th><th>게스트 이름</th><th>인원</th><th>플랫폼</th><th>숙박 기간</th><th>총 금액</th><th>상태</th></tr></thead>
                 <tbody>
                   {todayArrivals.map((g, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: "bold" }}>{g.building} {g.room}</td>
                       <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
+                      <td style={{ fontSize: "13px" }}>성인 {g.numAdult || 0}, 아동 {g.numChild || 0}</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
                       <td style={{ fontSize: "13px", color: "#666" }}>{g.arrival} ~ {g.departure}</td>
                       <td style={{ fontWeight: "bold" }}>{formatPrice(g.totalPrice || g.price)}</td>
@@ -1084,12 +1085,13 @@ function ArrivalsDashboard() {
               <p style={{ textAlign: "center", color: "#aaa", padding: "20px" }}>{selectedDate} 퇴실 예정자가 없습니다.</p>
             ) : (
               <table className="table-full">
-                <thead><tr><th>객실</th><th>게스트 이름</th><th>체크인 날짜</th><th>플랫폼</th><th>총 금액</th><th>상태</th></tr></thead>
+                <thead><tr><th>객실</th><th>게스트 이름</th><th>인원</th><th>체크인 날짜</th><th>플랫폼</th><th>총 금액</th><th>상태</th></tr></thead>
                 <tbody>
                   {todayDepartures.map((g, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: "bold" }}>{g.building} {g.room}</td>
                       <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
+                      <td style={{ fontSize: "13px" }}>성인 {g.numAdult || 0}, 아동 {g.numChild || 0}</td>
                       <td style={{ color: "#0071E3", fontWeight: "600" }}>{g.arrival} (입실일)</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
                       <td>{formatPrice(g.totalPrice || g.price)}</td>

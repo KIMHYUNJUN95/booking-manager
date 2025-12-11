@@ -121,6 +121,8 @@ function normalize(b, propKey, building) {
         status, rawStatus: String(b.status), platform,
         date, price: totalPrice, nights,
         bookDate: bookDateStr, arrival, departure, stayMonth, totalPrice,
+        numAdult: parseInt(b.numAdult) || 0,
+        numChild: parseInt(b.numChild) || 0,
         updatedAt: new Date(),
     };
 }

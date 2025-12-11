@@ -116,12 +116,16 @@ const CleaningDashboard = () => {
             checkoutBookingId: res.bookId || res.id,
             checkoutGuestName: res.guestName || "(이름없음)",
             checkoutTime: DEFAULT_CHECKOUT_TIME,
+            checkoutNumAdult: res.numAdult || 0,
+            checkoutNumChild: res.numChild || 0,
 
             // 다음 입실 정보
             hasNextCheckin: !!nextCheckin,
             nextCheckinBookingId: nextCheckin?.bookId || null,
             nextCheckinGuestName: nextCheckin?.guestName || null,
             nextCheckinTime: nextCheckin?.guestArrivalTime || DEFAULT_CHECKIN_TIME,
+            nextCheckinNumAdult: nextCheckin?.numAdult || 0,
+            nextCheckinNumChild: nextCheckin?.numChild || 0,
 
             // 청소 상태 (기존 태스크가 있으면 사용, 없으면 pending)
             status: existingTask?.status || "pending",
@@ -288,6 +292,7 @@ const CleaningDashboard = () => {
                     {/* 퇴실 게스트 */}
                     <td style={{ fontSize: "13px" }}>
                       {task.checkoutGuestName}
+                      <br/><span style={{ color: "#888", fontSize: "11px" }}>성인 {task.checkoutNumAdult}, 아동 {task.checkoutNumChild}</span>
                     </td>
 
                     {/* 퇴실 시간 */}
@@ -298,7 +303,10 @@ const CleaningDashboard = () => {
                     {/* 다음 입실 게스트 */}
                     <td style={{ fontSize: "13px" }}>
                       {task.hasNextCheckin ? (
-                        <span style={{ color: "#0071E3" }}>{task.nextCheckinGuestName}</span>
+                        <>
+                          <span style={{ color: "#0071E3" }}>{task.nextCheckinGuestName}</span>
+                          <br/><span style={{ color: "#888", fontSize: "11px" }}>성인 {task.nextCheckinNumAdult}, 아동 {task.nextCheckinNumChild}</span>
+                        </>
                       ) : (
                         <span style={{ color: "#999" }}>-</span>
                       )}

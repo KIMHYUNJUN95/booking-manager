@@ -123,6 +123,14 @@ function normalize(b, propKey, building) {
         bookDate: bookDateStr, arrival, departure, stayMonth, totalPrice,
         numAdult: parseInt(b.numAdult) || 0,
         numChild: parseInt(b.numChild) || 0,
+        // ★ 고객 상세 정보 추가
+        guestEmail: b.guestEmail || "",
+        guestPhone: b.guestPhone || b.guestMobile || "",
+        guestCountry: b.guestCountry || "",
+        guestAddress: b.guestAddress || "",
+        guestCity: b.guestCity || "",
+        guestComments: b.guestComments || b.notes || "",
+        arrivalTime: b.arrivalTime || "",
         updatedAt: new Date(),
     };
 }

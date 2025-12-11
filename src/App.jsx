@@ -273,6 +273,119 @@ function DetailModal({ title, data, onClose }) {
 }
 
 // ==============================
+// 고객 상세 정보 모달
+// ==============================
+function GuestDetailModal({ guest, onClose }) {
+  if (!guest) return null;
+
+  const formatPrice = (price) => {
+    if (!price) return "¥0";
+    const num = parseFloat(String(price).replace(/[^0-9.-]+/g,""));
+    if (isNaN(num)) return "¥0";
+    return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(num);
+  };
+
+  const InfoRow = ({ label, value, icon }) => (
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "14px 0",
+      borderBottom: "1px solid #F2F2F7"
+    }}>
+      <span style={{ color: "#86868B", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <span>{icon}</span> {label}
+      </span>
+      <span style={{ fontWeight: "600", fontSize: "14px", color: value ? "#1D1D1F" : "#CCC", maxWidth: "60%", textAlign: "right", wordBreak: "break-word" }}>
+        {value || "정보 없음"}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
+        <div className="modal-header" style={{ borderBottom: "none", paddingBottom: "0" }}>
+          <div>
+            <div className="modal-title" style={{ fontSize: "22px" }}>고객 상세 정보</div>
+            <div style={{ fontSize: "13px", color: "#86868B", marginTop: "4px" }}>{guest.building} {guest.room}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+
+        {/* 고객 기본 정보 카드 */}
+        <div style={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          borderRadius: "16px",
+          padding: "20px",
+          marginBottom: "20px",
+          color: "white"
+        }}>
+          <div style={{ fontSize: "20px", fontWeight: "700", marginBottom: "8px" }}>
+            {guest.guestName || "(이름 없음)"}
+          </div>
+          <div style={{ display: "flex", gap: "16px", fontSize: "13px", opacity: "0.9" }}>
+            <span>성인 {guest.numAdult || 0}명</span>
+            <span>아동 {guest.numChild || 0}명</span>
+            <span>{guest.platform}</span>
+          </div>
+        </div>
+
+        {/* 상세 정보 */}
+        <div style={{ maxHeight: "350px", overflowY: "auto" }}>
+          <InfoRow icon="📧" label="이메일" value={guest.guestEmail} />
+          <InfoRow icon="📞" label="전화번호" value={guest.guestPhone} />
+          <InfoRow icon="🌍" label="국가" value={guest.guestCountry} />
+          <InfoRow icon="🏠" label="주소" value={guest.guestAddress ? `${guest.guestAddress}${guest.guestCity ? `, ${guest.guestCity}` : ""}` : ""} />
+          <InfoRow icon="🕐" label="도착 예정 시간" value={guest.arrivalTime} />
+          <InfoRow icon="📅" label="체크인" value={guest.arrival} />
+          <InfoRow icon="📅" label="체크아웃" value={guest.departure} />
+          <InfoRow icon="🌙" label="숙박일수" value={guest.nights ? `${guest.nights}박` : ""} />
+          <InfoRow icon="💰" label="총 금액" value={formatPrice(guest.totalPrice || guest.price)} />
+
+          {/* 고객 코멘트 */}
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ color: "#86868B", fontSize: "14px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>💬</span> 고객 코멘트 / 메모
+            </div>
+            <div style={{
+              background: "#F9F9F9",
+              padding: "14px",
+              borderRadius: "12px",
+              fontSize: "14px",
+              color: guest.guestComments ? "#1D1D1F" : "#CCC",
+              minHeight: "60px",
+              lineHeight: "1.5"
+            }}>
+              {guest.guestComments || "코멘트 없음"}
+            </div>
+          </div>
+        </div>
+
+        {/* 닫기 버튼 */}
+        <button
+          onClick={onClose}
+          style={{
+            width: "100%",
+            padding: "14px",
+            marginTop: "20px",
+            background: "#0071E3",
+            color: "white",
+            border: "none",
+            borderRadius: "12px",
+            fontSize: "16px",
+            fontWeight: "600",
+            cursor: "pointer"
+          }}
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ==============================
 // 기록 수정 모달
 // ==============================
 function EditModal({ record, onClose, onSave }) {
@@ -983,6 +1096,10 @@ function ArrivalsDashboard() {
   const [loading, setLoading] = useState(false);
   const [guestList, setGuestList] = useState([]);
   const [error, setError] = useState("");
+  const [selectedGuest, setSelectedGuest] = useState(null);  // 선택된 고객 (모달용)
+  const [searchQuery, setSearchQuery] = useState("");  // 고객 이름 검색
+  const [searchResults, setSearchResults] = useState([]);  // 검색 결과
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const formatPrice = (price) => {
     if (!price) return "¥0";
@@ -1028,15 +1145,140 @@ function ArrivalsDashboard() {
     fetchTodayArrivals();
   }, [selectedDate]);
 
+  // 고객 이름 검색 함수
+  const searchGuests = async (queryText) => {
+    if (!queryText || queryText.trim().length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      // Firestore에서 모든 confirmed 예약을 가져와서 클라이언트에서 검색
+      const q = query(
+        collection(db, "reservations"),
+        where("status", "==", "confirmed")
+      );
+      const snapshot = await getDocs(q);
+      const allGuests = snapshot.docs.map(doc => doc.data());
+
+      // 이름으로 필터링 (대소문자 무시)
+      const searchLower = queryText.toLowerCase();
+      const filtered = allGuests.filter(g =>
+        g.guestName && g.guestName.toLowerCase().includes(searchLower)
+      );
+
+      // 도착일 기준 정렬 (최근 것 먼저)
+      filtered.sort((a, b) => {
+        if (!a.arrival) return 1;
+        if (!b.arrival) return -1;
+        return b.arrival.localeCompare(a.arrival);
+      });
+
+      setSearchResults(filtered.slice(0, 20)); // 최대 20개
+      setShowSearchResults(true);
+    } catch (err) {
+      console.error("검색 오류:", err);
+      setSearchResults([]);
+    }
+  };
+
+  // 검색어 변경 시 디바운스 적용
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchGuests(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // 선택한 날짜의 입실/퇴실 필터링 후 건물 순서대로 정렬
   const todayArrivals = sortByBuildingOrder(guestList.filter(guest => guest.arrival === selectedDate));
   const todayDepartures = sortByBuildingOrder(guestList.filter(guest => guest.departure === selectedDate));
 
   return (
     <div className="dashboard-content">
+      {/* 고객 상세 모달 */}
+      {selectedGuest && (
+        <GuestDetailModal
+          guest={selectedGuest}
+          onClose={() => setSelectedGuest(null)}
+        />
+      )}
+
       <div className="dashboard-header">
         <h2 className="page-title">🚪 입/퇴실 관리</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {/* 고객 검색 */}
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="🔍 고객 이름 검색..."
+              style={{ marginBottom: 0, width: "200px" }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
+              onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+            />
+            {/* 검색 결과 드롭다운 */}
+            {showSearchResults && searchResults.length > 0 && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                background: "white",
+                borderRadius: "12px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                zIndex: 1000,
+                maxHeight: "300px",
+                overflowY: "auto",
+                marginTop: "4px"
+              }}>
+                {searchResults.map((guest, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedGuest(guest);
+                      setShowSearchResults(false);
+                      setSearchQuery("");
+                    }}
+                    style={{
+                      padding: "12px 16px",
+                      borderBottom: "1px solid #F2F2F7",
+                      cursor: "pointer",
+                      transition: "background 0.2s"
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = "#F5F5F7"}
+                    onMouseLeave={(e) => e.target.style.background = "white"}
+                  >
+                    <div style={{ fontWeight: "600", fontSize: "14px" }}>{guest.guestName}</div>
+                    <div style={{ fontSize: "12px", color: "#86868B" }}>
+                      {guest.building} {guest.room} | {guest.arrival} ~ {guest.departure}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showSearchResults && searchQuery.length >= 2 && searchResults.length === 0 && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                background: "white",
+                borderRadius: "12px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                zIndex: 1000,
+                padding: "20px",
+                textAlign: "center",
+                color: "#86868B",
+                marginTop: "4px"
+              }}>
+                검색 결과가 없습니다
+              </div>
+            )}
+          </div>
           <input type="date" className="form-input" style={{ marginBottom: 0, width: "160px", fontWeight: "bold" }} value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
           <button className="btn-primary" style={{ width: "auto", padding: "10px 20px" }} onClick={fetchTodayArrivals}>🔄 새로고침</button>
         </div>
@@ -1063,7 +1305,19 @@ function ArrivalsDashboard() {
                   {todayArrivals.map((g, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: "bold" }}>{g.building} {g.room}</td>
-                      <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
+                      <td>
+                        <span
+                          onClick={() => setSelectedGuest(g)}
+                          style={{
+                            cursor: "pointer",
+                            color: "#0071E3",
+                            textDecoration: "underline",
+                            fontWeight: "500"
+                          }}
+                        >
+                          {g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}
+                        </span>
+                      </td>
                       <td style={{ fontSize: "13px" }}>성인 {g.numAdult || 0}, 아동 {g.numChild || 0}</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
                       <td style={{ fontSize: "13px", color: "#666" }}>{g.arrival} ~ {g.departure}</td>
@@ -1090,7 +1344,19 @@ function ArrivalsDashboard() {
                   {todayDepartures.map((g, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: "bold" }}>{g.building} {g.room}</td>
-                      <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
+                      <td>
+                        <span
+                          onClick={() => setSelectedGuest(g)}
+                          style={{
+                            cursor: "pointer",
+                            color: "#0071E3",
+                            textDecoration: "underline",
+                            fontWeight: "500"
+                          }}
+                        >
+                          {g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}
+                        </span>
+                      </td>
                       <td style={{ fontSize: "13px" }}>성인 {g.numAdult || 0}, 아동 {g.numChild || 0}</td>
                       <td style={{ color: "#0071E3", fontWeight: "600" }}>{g.arrival} (입실일)</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>

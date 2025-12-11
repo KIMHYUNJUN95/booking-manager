@@ -177,70 +177,45 @@ const RevenueDashboard = () => {
       const currentPeriodInfo = getPeriodInfo(selectedPeriod);
       const comparePeriodInfo = getPeriodInfo(comparePeriod);
 
+      // ★ totalPrice 기준으로 매출 집계 (입실/퇴실 대시보드와 동일한 금액)
+      // arrival(체크인일) 기준으로 해당 기수/기간에 포함되는지 판단
       allDocs.forEach(doc => {
-        if (doc.nights && Array.isArray(doc.nights) && doc.nights.length > 0) {
-          doc.nights.forEach(night => {
-            const nDate = night.date;
-            if (!nDate) return;
+        if (!doc.arrival) return;
 
-            const nMonth = nDate.slice(5, 7);
-            const amount = Number(night.amount) || 0;
-            const bName = doc.building || "Unknown";
-            const rName = doc.room || "Unknown";
+        // totalPrice 사용 (Beds24 invoiceItems 합계 = 실제 예약 금액)
+        const price = Number(doc.totalPrice || doc.price) || 0;
+        const bName = doc.building || "Unknown";
+        const rName = doc.room || "Unknown";
+        const arrivalMonth = doc.arrival.slice(5, 7); // "01" ~ "12"
 
-            // 현재 기수/커스텀 범위
-            if (isInRange(nDate, currentRange.startDate, currentRange.endDate)) {
-              const monthKey = useCustomDate ? nDate.slice(0, 7) : nMonth;
-              if (monthlyMap[monthKey]) {
-                monthlyMap[monthKey].current += amount;
-              }
-              calcCurrentTotal += amount;
-
-              bMapCurrent[bName] = (bMapCurrent[bName] || 0) + amount;
-              if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
-              rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + amount;
-            }
-
-            // 비교 기수/범위
-            if (isInRange(nDate, compareRange.startDate, compareRange.endDate)) {
-              const monthKey = useCustomDate
-                ? `${parseInt(nDate.slice(0, 4)) + 1}-${nDate.slice(5, 7)}` // 1년 더해서 같은 키로
-                : nMonth;
-              if (monthlyMap[monthKey] || monthlyMap[nMonth]) {
-                const key = useCustomDate ? monthKey : nMonth;
-                if (monthlyMap[key]) {
-                  monthlyMap[key].compare += amount;
-                } else if (monthlyMap[nMonth]) {
-                  monthlyMap[nMonth].compare += amount;
-                }
-              }
-              calcCompareTotal += amount;
-
-              bMapCompare[bName] = (bMapCompare[bName] || 0) + amount;
-              if (!rMapCompare[bName]) rMapCompare[bName] = {};
-              rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + amount;
-            }
-          });
-        } else {
-          // Fallback: nights 배열이 없는 데이터
-          if (!doc.arrival) return;
-          const price = Number(doc.totalPrice || doc.price) || 0;
-          const bName = doc.building || "Unknown";
-          const rName = doc.room || "Unknown";
-
-          if (isInRange(doc.arrival, currentRange.startDate, currentRange.endDate)) {
-            calcCurrentTotal += price;
-            bMapCurrent[bName] = (bMapCurrent[bName] || 0) + price;
-            if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
-            rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + price;
+        // 현재 기수/커스텀 범위 체크
+        if (isInRange(doc.arrival, currentRange.startDate, currentRange.endDate)) {
+          const monthKey = useCustomDate ? doc.arrival.slice(0, 7) : arrivalMonth;
+          if (monthlyMap[monthKey]) {
+            monthlyMap[monthKey].current += price;
           }
+          calcCurrentTotal += price;
 
-          if (isInRange(doc.arrival, compareRange.startDate, compareRange.endDate)) {
-            calcCompareTotal += price;
-            bMapCompare[bName] = (bMapCompare[bName] || 0) + price;
-            if (!rMapCompare[bName]) rMapCompare[bName] = {};
-            rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + price;
+          bMapCurrent[bName] = (bMapCurrent[bName] || 0) + price;
+          if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
+          rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + price;
+        }
+
+        // 비교 기수/범위 체크
+        if (isInRange(doc.arrival, compareRange.startDate, compareRange.endDate)) {
+          const monthKey = useCustomDate
+            ? `${parseInt(doc.arrival.slice(0, 4)) + 1}-${arrivalMonth}`
+            : arrivalMonth;
+          if (monthlyMap[monthKey]) {
+            monthlyMap[monthKey].compare += price;
+          } else if (monthlyMap[arrivalMonth]) {
+            monthlyMap[arrivalMonth].compare += price;
           }
+          calcCompareTotal += price;
+
+          bMapCompare[bName] = (bMapCompare[bName] || 0) + price;
+          if (!rMapCompare[bName]) rMapCompare[bName] = {};
+          rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + price;
         }
       });
 

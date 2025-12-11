@@ -1,152 +1,284 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from './firebase'; 
+import { db } from './firebase';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
+// ★ 기수 정의 (7기 = 2025.07 ~ 2026.06)
+const FISCAL_PERIODS = [
+  { period: 8, label: "8기", startYear: 2026, startMonth: 7, endYear: 2027, endMonth: 6 },
+  { period: 7, label: "7기", startYear: 2025, startMonth: 7, endYear: 2026, endMonth: 6 },
+  { period: 6, label: "6기", startYear: 2024, startMonth: 7, endYear: 2025, endMonth: 6 },
+  { period: 5, label: "5기", startYear: 2023, startMonth: 7, endYear: 2024, endMonth: 6 },
+  { period: 4, label: "4기", startYear: 2022, startMonth: 7, endYear: 2023, endMonth: 6 },
+];
+
+// 현재 날짜 기준으로 현재 기수 찾기
+const getCurrentPeriod = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+
+  for (const fp of FISCAL_PERIODS) {
+    // 시작일과 종료일 체크
+    const startDate = new Date(fp.startYear, fp.startMonth - 1, 1);
+    const endDate = new Date(fp.endYear, fp.endMonth, 0); // 해당 월의 마지막 날
+
+    if (now >= startDate && now <= endDate) {
+      return fp.period;
+    }
+  }
+  return 7; // 기본값
+};
+
+// 기수 정보 가져오기
+const getPeriodInfo = (periodNum) => {
+  return FISCAL_PERIODS.find(p => p.period === periodNum) || FISCAL_PERIODS[1]; // 기본 7기
+};
+
+// 건물 정렬 순서
+const BUILDING_ORDER = [
+  "아라키초A", "아라키초B", "다이쿄초", "가부키초",
+  "다카다노바바", "오쿠보A동", "오쿠보B동", "오쿠보C동", "사노시"
+];
+
 const RevenueDashboard = () => {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  // 현재 기수를 기본값으로 설정
+  const [selectedPeriod, setSelectedPeriod] = useState(getCurrentPeriod());
+  const [comparePeriod, setComparePeriod] = useState(getCurrentPeriod() - 1);
   const [loading, setLoading] = useState(true);
-  
+
+  // 커스텀 날짜 검색
+  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+
+  // 데이터 상태
   const [monthlyData, setMonthlyData] = useState([]);
   const [buildingData, setBuildingData] = useState([]);
+  const [buildingCompareData, setBuildingCompareData] = useState([]); // 건물별 비교 데이터
   const [roomData, setRoomData] = useState({});
+  const [roomCompareData, setRoomCompareData] = useState({}); // 객실별 비교 데이터
   const [totalRevenue, setTotalRevenue] = useState(0);
-  const [lastYearRevenue, setLastYearRevenue] = useState(0);
+  const [compareRevenue, setCompareRevenue] = useState(0);
 
   useEffect(() => {
     fetchRevenueData();
-  }, [selectedYear]);
+  }, [selectedPeriod, comparePeriod, useCustomDate, customStartDate, customEndDate]);
+
+  // 기수 또는 커스텀 날짜에 해당하는 날짜 범위 반환
+  const getDateRange = (periodNum, isCompare = false) => {
+    if (useCustomDate && customStartDate && customEndDate && !isCompare) {
+      return {
+        startDate: customStartDate,
+        endDate: customEndDate
+      };
+    }
+
+    // 커스텀 날짜 비교용 (1년 전 동일 기간)
+    if (useCustomDate && customStartDate && customEndDate && isCompare) {
+      const start = new Date(customStartDate);
+      const end = new Date(customEndDate);
+      start.setFullYear(start.getFullYear() - 1);
+      end.setFullYear(end.getFullYear() - 1);
+      return {
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10)
+      };
+    }
+
+    const period = getPeriodInfo(periodNum);
+    return {
+      startDate: `${period.startYear}-${String(period.startMonth).padStart(2, '0')}-01`,
+      endDate: `${period.endYear}-${String(period.endMonth).padStart(2, '0')}-${period.endMonth === 6 ? '30' : '31'}`
+    };
+  };
+
+  // 월 라벨 생성 (7월~6월 순서)
+  const getMonthLabels = () => {
+    if (useCustomDate && customStartDate && customEndDate) {
+      // 커스텀 날짜일 때는 해당 범위의 월만 표시
+      const start = new Date(customStartDate);
+      const end = new Date(customEndDate);
+      const labels = [];
+
+      let current = new Date(start.getFullYear(), start.getMonth(), 1);
+      while (current <= end) {
+        labels.push({
+          key: `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`,
+          label: `${current.getMonth() + 1}월`
+        });
+        current.setMonth(current.getMonth() + 1);
+      }
+      return labels;
+    }
+
+    // 기수 기준: 7월~12월, 1월~6월
+    return [
+      { key: '07', label: '7월' },
+      { key: '08', label: '8월' },
+      { key: '09', label: '9월' },
+      { key: '10', label: '10월' },
+      { key: '11', label: '11월' },
+      { key: '12', label: '12월' },
+      { key: '01', label: '1월' },
+      { key: '02', label: '2월' },
+      { key: '03', label: '3월' },
+      { key: '04', label: '4월' },
+      { key: '05', label: '5월' },
+      { key: '06', label: '6월' },
+    ];
+  };
 
   const fetchRevenueData = async () => {
     setLoading(true);
-    
-    // 1. 데이터 조회 범위 설정
-    // 월 걸침 예약을 고려하여, 앞뒤로 넉넉하게 가져온 뒤 JS에서 필터링합니다.
-    const lastYear = selectedYear - 1;
-    
-    // 올해 데이터 쿼리
-    const qCurrent = query(
-      collection(db, "reservations"),
-      where("stayMonth", ">=", `${selectedYear}-01`),
-      where("stayMonth", "<=", `${selectedYear}-12`),
-      where("status", "==", "confirmed")
-    );
-
-    // 작년 데이터 쿼리
-    const qLast = query(
-      collection(db, "reservations"),
-      where("stayMonth", ">=", `${lastYear}-01`),
-      where("stayMonth", "<=", `${lastYear}-12`),
-      where("status", "==", "confirmed")
-    );
 
     try {
-        const [snapCurrent, snapLast] = await Promise.all([getDocs(qCurrent), getDocs(qLast)]);
-        
-        const currentDocs = snapCurrent.docs.map(d => d.data());
-        const lastDocs = snapLast.docs.map(d => d.data());
-        
-        // 병합된 데이터 리스트 (작년 + 올해)
-        const allDocs = [...currentDocs, ...lastDocs];
+      const currentRange = getDateRange(selectedPeriod, false);
+      const compareRange = getDateRange(comparePeriod, !useCustomDate ? false : true);
 
-        // --- [Beds24 기준 핵심 로직: nights 배열 기반 집계] ---
-        
-        // 1. 초기화 (1월~12월)
-        const monthlyMap = {};
-        for(let i=1; i<=12; i++) {
-          const monthKey = String(i).padStart(2, '0');
-          monthlyMap[monthKey] = { month: `${i}월`, current: 0, last: 0 };
-        }
+      // 전체 데이터 가져오기 (2023년부터)
+      const q = query(
+        collection(db, "reservations"),
+        where("status", "==", "confirmed")
+      );
 
-        // 집계 변수
-        let calcCurrentTotal = 0;
-        let calcLastTotal = 0;
-        const bMap = {}; // 건물별
-        const rMap = {}; // 객실별
+      const snapshot = await getDocs(q);
+      const allDocs = snapshot.docs.map(d => d.data());
 
-        // 2. 모든 예약 건을 순회
-        allDocs.forEach(doc => {
-          // nights 배열이 없으면(구버전 데이터) price를 사용, 있으면 nights 사용
-          // ★ 우리가 만든 Backend 코드는 무조건 nights를 생성하므로 정확함
-          if (doc.nights && Array.isArray(doc.nights) && doc.nights.length > 0) {
-            
-            doc.nights.forEach(night => {
-              // night.date 형태: "2024-12-25"
-              const nDate = night.date;
-              const nYear = parseInt(nDate.slice(0, 4));
-              const nMonth = nDate.slice(5, 7); // "12"
-              const amount = Number(night.amount) || 0;
+      // 날짜가 범위 내인지 확인하는 함수
+      const isInRange = (dateStr, start, end) => {
+        if (!dateStr) return false;
+        return dateStr >= start && dateStr <= end;
+      };
 
-              // [올해 매출 처리]
-              if (nYear === selectedYear) {
-                if (monthlyMap[nMonth]) {
-                  monthlyMap[nMonth].current += amount;
-                  calcCurrentTotal += amount;
-                }
+      // 월별 데이터 초기화
+      const monthLabels = getMonthLabels();
+      const monthlyMap = {};
 
-                // 건물/객실 통계는 '올해' 것만 집계
-                const bName = doc.building || "Unknown";
-                const rName = doc.room || "Unknown";
-                
-                bMap[bName] = (bMap[bName] || 0) + amount;
-                if (!rMap[bName]) rMap[bName] = {};
-                rMap[bName][rName] = (rMap[bName][rName] || 0) + amount;
-              }
-
-              // [작년 매출 처리] (비교용)
-              if (nYear === lastYear) {
-                if (monthlyMap[nMonth]) {
-                  monthlyMap[nMonth].last += amount;
-                  calcLastTotal += amount;
-                }
-              }
-            });
-
-          } else {
-            // [Fallback] nights 배열이 없는 옛날 데이터 처리 (기존 로직 유지)
-            // stayMonth 기준으로 통째로 더함 (오차 발생 가능성 있음)
-            if (!doc.stayMonth) return;
-            const sYear = parseInt(doc.stayMonth.slice(0, 4));
-            const sMonth = doc.stayMonth.slice(5, 7);
-            const price = Number(doc.price) || 0;
-
-            if (sYear === selectedYear) {
-              if (monthlyMap[sMonth]) {
-                monthlyMap[sMonth].current += price;
-                calcCurrentTotal += price;
-              }
-              const bName = doc.building || "Unknown";
-              const rName = doc.room || "Unknown";
-              bMap[bName] = (bMap[bName] || 0) + price;
-              if (!rMap[bName]) rMap[bName] = {};
-              rMap[bName][rName] = (rMap[bName][rName] || 0) + price;
-            } else if (sYear === lastYear) {
-               if (monthlyMap[sMonth]) {
-                monthlyMap[sMonth].last += price;
-                calcLastTotal += price;
-              }
-            }
-          }
+      if (useCustomDate) {
+        monthLabels.forEach(m => {
+          monthlyMap[m.key] = { month: m.label, current: 0, compare: 0 };
         });
+      } else {
+        monthLabels.forEach(m => {
+          monthlyMap[m.key] = { month: m.label, current: 0, compare: 0 };
+        });
+      }
 
-        // 3. 차트용 배열 변환
-        const chartData = Object.values(monthlyMap);
+      // 집계 변수
+      let calcCurrentTotal = 0;
+      let calcCompareTotal = 0;
+      const bMapCurrent = {};
+      const bMapCompare = {};
+      const rMapCurrent = {};
+      const rMapCompare = {};
 
-        // 4. 건물별 랭킹 정렬
-        const buildingChartData = Object.keys(bMap)
-          .map(key => ({ name: key, value: bMap[key] }))
-          .sort((a, b) => b.value - a.value);
+      // 현재 기수 정보
+      const currentPeriodInfo = getPeriodInfo(selectedPeriod);
+      const comparePeriodInfo = getPeriodInfo(comparePeriod);
 
-        setMonthlyData(chartData);
-        setBuildingData(buildingChartData);
-        setRoomData(rMap);
-        setTotalRevenue(calcCurrentTotal);
-        setLastYearRevenue(calcLastTotal);
+      allDocs.forEach(doc => {
+        if (doc.nights && Array.isArray(doc.nights) && doc.nights.length > 0) {
+          doc.nights.forEach(night => {
+            const nDate = night.date;
+            if (!nDate) return;
+
+            const nMonth = nDate.slice(5, 7);
+            const amount = Number(night.amount) || 0;
+            const bName = doc.building || "Unknown";
+            const rName = doc.room || "Unknown";
+
+            // 현재 기수/커스텀 범위
+            if (isInRange(nDate, currentRange.startDate, currentRange.endDate)) {
+              const monthKey = useCustomDate ? nDate.slice(0, 7) : nMonth;
+              if (monthlyMap[monthKey]) {
+                monthlyMap[monthKey].current += amount;
+              }
+              calcCurrentTotal += amount;
+
+              bMapCurrent[bName] = (bMapCurrent[bName] || 0) + amount;
+              if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
+              rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + amount;
+            }
+
+            // 비교 기수/범위
+            if (isInRange(nDate, compareRange.startDate, compareRange.endDate)) {
+              const monthKey = useCustomDate
+                ? `${parseInt(nDate.slice(0, 4)) + 1}-${nDate.slice(5, 7)}` // 1년 더해서 같은 키로
+                : nMonth;
+              if (monthlyMap[monthKey] || monthlyMap[nMonth]) {
+                const key = useCustomDate ? monthKey : nMonth;
+                if (monthlyMap[key]) {
+                  monthlyMap[key].compare += amount;
+                } else if (monthlyMap[nMonth]) {
+                  monthlyMap[nMonth].compare += amount;
+                }
+              }
+              calcCompareTotal += amount;
+
+              bMapCompare[bName] = (bMapCompare[bName] || 0) + amount;
+              if (!rMapCompare[bName]) rMapCompare[bName] = {};
+              rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + amount;
+            }
+          });
+        } else {
+          // Fallback: nights 배열이 없는 데이터
+          if (!doc.arrival) return;
+          const price = Number(doc.totalPrice || doc.price) || 0;
+          const bName = doc.building || "Unknown";
+          const rName = doc.room || "Unknown";
+
+          if (isInRange(doc.arrival, currentRange.startDate, currentRange.endDate)) {
+            calcCurrentTotal += price;
+            bMapCurrent[bName] = (bMapCurrent[bName] || 0) + price;
+            if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
+            rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + price;
+          }
+
+          if (isInRange(doc.arrival, compareRange.startDate, compareRange.endDate)) {
+            calcCompareTotal += price;
+            bMapCompare[bName] = (bMapCompare[bName] || 0) + price;
+            if (!rMapCompare[bName]) rMapCompare[bName] = {};
+            rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + price;
+          }
+        }
+      });
+
+      // 차트용 배열 변환
+      const chartData = Object.entries(monthlyMap).map(([key, val]) => val);
+
+      // 건물별 데이터 (정렬)
+      const buildingChartData = BUILDING_ORDER
+        .filter(name => bMapCurrent[name] || bMapCompare[name])
+        .map(name => ({
+          name,
+          current: bMapCurrent[name] || 0,
+          compare: bMapCompare[name] || 0
+        }));
+
+      // 다른 건물들 추가
+      Object.keys(bMapCurrent).forEach(name => {
+        if (!BUILDING_ORDER.includes(name)) {
+          buildingChartData.push({
+            name,
+            current: bMapCurrent[name] || 0,
+            compare: bMapCompare[name] || 0
+          });
+        }
+      });
+
+      setMonthlyData(chartData);
+      setBuildingData(buildingChartData.map(b => ({ name: b.name, value: b.current })));
+      setBuildingCompareData(buildingChartData);
+      setRoomData(rMapCurrent);
+      setRoomCompareData(rMapCompare);
+      setTotalRevenue(calcCurrentTotal);
+      setCompareRevenue(calcCompareTotal);
 
     } catch (error) {
-        console.error("매출 데이터 로딩 실패:", error);
+      console.error("매출 데이터 로딩 실패:", error);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -154,23 +286,107 @@ const RevenueDashboard = () => {
     return "¥ " + Math.floor(val).toLocaleString();
   };
 
+  const getGrowthRate = (current, compare) => {
+    if (!compare || compare === 0) return null;
+    return ((current - compare) / compare * 100).toFixed(1);
+  };
+
+  const currentPeriodInfo = getPeriodInfo(selectedPeriod);
+  const comparePeriodInfo = getPeriodInfo(comparePeriod);
+
+  // 표시용 라벨
+  const currentLabel = useCustomDate
+    ? `${customStartDate} ~ ${customEndDate}`
+    : `${currentPeriodInfo.label} (${currentPeriodInfo.startYear}.${currentPeriodInfo.startMonth}~${currentPeriodInfo.endYear}.${currentPeriodInfo.endMonth})`;
+
+  const compareLabel = useCustomDate
+    ? `전년 동기간`
+    : `${comparePeriodInfo.label} (${comparePeriodInfo.startYear}.${comparePeriodInfo.startMonth}~${comparePeriodInfo.endYear}.${comparePeriodInfo.endMonth})`;
+
   return (
     <div className="dashboard-content">
       <div className="dashboard-header">
-        <h2 className="page-title" style={{ color: "#2E7D32" }}>💰 매출 대시보드 (Beds24 연동)</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontWeight: "600", color: "#666" }}>조회 연도:</span>
-          <select 
-            className="form-select" 
-            style={{ width: "auto", marginBottom: 0, fontSize: "16px", fontWeight: "bold" }}
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-          >
-            <option value={2023}>2023년</option>
-            <option value={2024}>2024년</option>
-            <option value={2025}>2025년</option>
-            <option value={2026}>2026년</option>
-          </select>
+        <h2 className="page-title" style={{ color: "#2E7D32" }}>💰 매출 대시보드</h2>
+      </div>
+
+      {/* 기수 선택 및 날짜 검색 영역 */}
+      <div style={{
+        background: "white",
+        padding: "20px",
+        borderRadius: "16px",
+        marginBottom: "20px",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.05)"
+      }}>
+        <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", alignItems: "flex-end" }}>
+          {/* 기수 선택 */}
+          <div>
+            <label style={{ fontSize: "13px", color: "#666", display: "block", marginBottom: "6px" }}>조회 기수</label>
+            <select
+              className="form-select"
+              style={{ width: "160px", marginBottom: 0 }}
+              value={selectedPeriod}
+              onChange={(e) => {
+                setSelectedPeriod(Number(e.target.value));
+                setUseCustomDate(false);
+              }}
+              disabled={useCustomDate}
+            >
+              {FISCAL_PERIODS.map(p => (
+                <option key={p.period} value={p.period}>
+                  {p.label} ({p.startYear}.{p.startMonth}~{p.endYear}.{p.endMonth})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 비교 기수 선택 */}
+          <div>
+            <label style={{ fontSize: "13px", color: "#666", display: "block", marginBottom: "6px" }}>비교 기수</label>
+            <select
+              className="form-select"
+              style={{ width: "160px", marginBottom: 0 }}
+              value={comparePeriod}
+              onChange={(e) => setComparePeriod(Number(e.target.value))}
+              disabled={useCustomDate}
+            >
+              {FISCAL_PERIODS.map(p => (
+                <option key={p.period} value={p.period}>
+                  {p.label} ({p.startYear}.{p.startMonth}~{p.endYear}.{p.endMonth})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ borderLeft: "1px solid #E5E5EA", paddingLeft: "20px" }}>
+            <label style={{ fontSize: "13px", color: "#666", display: "block", marginBottom: "6px" }}>
+              <input
+                type="checkbox"
+                checked={useCustomDate}
+                onChange={(e) => setUseCustomDate(e.target.checked)}
+                style={{ marginRight: "6px" }}
+              />
+              직접 날짜 선택
+            </label>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <input
+                type="date"
+                className="form-input"
+                style={{ width: "150px", marginBottom: 0 }}
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                disabled={!useCustomDate}
+              />
+              <span>~</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ width: "150px", marginBottom: 0 }}
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                disabled={!useCustomDate}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -181,90 +397,197 @@ const RevenueDashboard = () => {
         </div>
       ) : (
         <>
+          {/* KPI 카드 */}
           <div className="kpi-grid">
             <div className="kpi-card" style={{ borderLeft: "5px solid #2E7D32" }}>
-              <div className="kpi-label">{selectedYear}년 총 매출</div>
+              <div className="kpi-label">{currentLabel}</div>
               <div className="kpi-value" style={{ color: "#2E7D32" }}>{formatCurrency(totalRevenue)}</div>
-              <div className="kpi-sub">Gross 매출 (박수별 분배 적용됨)</div>
+              <div className="kpi-sub">총 매출</div>
             </div>
-            
+
             <div className="kpi-card" style={{ borderLeft: "5px solid #999" }}>
-              <div className="kpi-label">{selectedYear - 1}년 총 매출 (비교용)</div>
-              <div className="kpi-value" style={{ color: "#666" }}>{formatCurrency(lastYearRevenue)}</div>
+              <div className="kpi-label">{compareLabel}</div>
+              <div className="kpi-value" style={{ color: "#666" }}>{formatCurrency(compareRevenue)}</div>
+              <div className="kpi-sub">비교 매출</div>
+            </div>
+
+            <div className="kpi-card" style={{ borderLeft: "5px solid #0071E3" }}>
+              <div className="kpi-label">전기 대비 성장률</div>
+              <div className="kpi-value" style={{
+                color: getGrowthRate(totalRevenue, compareRevenue) >= 0 ? "#FF3B30" : "#0071E3"
+              }}>
+                {getGrowthRate(totalRevenue, compareRevenue) !== null
+                  ? `${getGrowthRate(totalRevenue, compareRevenue) >= 0 ? '+' : ''}${getGrowthRate(totalRevenue, compareRevenue)}%`
+                  : '-'
+                }
+              </div>
               <div className="kpi-sub">
-                {totalRevenue > lastYearRevenue 
-                  ? <span style={{color: "red"}}>▲ 작년 대비 상승</span>
-                  : <span style={{color: "blue"}}>▼ 작년 대비 하락</span>
+                {getGrowthRate(totalRevenue, compareRevenue) >= 0
+                  ? <span style={{color: "#FF3B30"}}>▲ 상승</span>
+                  : <span style={{color: "#0071E3"}}>▼ 하락</span>
                 }
               </div>
             </div>
           </div>
 
+          {/* 월별 매출 비교 차트 */}
           <div className="chart-card">
-            <div className="chart-title">📅 월별 매출 비교 ({selectedYear} vs {selectedYear-1})</div>
+            <div className="chart-title">📅 월별 매출 비교</div>
             <ResponsiveContainer width="100%" height={350}>
               <LineChart data={monthlyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" />
-                <YAxis tickFormatter={(val) => `¥${val/10000}만`} />
+                <YAxis tickFormatter={(val) => `¥${(val/10000).toFixed(0)}만`} />
                 <Tooltip formatter={(value) => formatCurrency(value)} />
                 <Legend />
-                <Line type="monotone" dataKey="current" name={`${selectedYear}년`} stroke="#2E7D32" strokeWidth={3} activeDot={{ r: 8 }} />
-                <Line type="monotone" dataKey="last" name={`${selectedYear-1}년`} stroke="#999" strokeWidth={2} strokeDasharray="5 5" />
+                <Line
+                  type="monotone"
+                  dataKey="current"
+                  name={useCustomDate ? "선택 기간" : currentPeriodInfo.label}
+                  stroke="#2E7D32"
+                  strokeWidth={3}
+                  activeDot={{ r: 8 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="compare"
+                  name={useCustomDate ? "전년 동기" : comparePeriodInfo.label}
+                  stroke="#999"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                />
               </LineChart>
             </ResponsiveContainer>
-             
-
-[Image of line chart comparing revenue across months]
-
           </div>
 
+          {/* 건물별 매출 비교 차트 */}
           <div className="chart-card">
-            <div className="chart-title">🏢 건물별 매출 순위</div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={buildingData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
-                <Tooltip formatter={(value) => formatCurrency(value)} cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" fill="#4CAF50" radius={[0, 4, 4, 0]} barSize={20} />
+            <div className="chart-title">🏢 건물별 매출 비교 ({useCustomDate ? "선택기간 vs 전년" : `${currentPeriodInfo.label} vs ${comparePeriodInfo.label}`})</div>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={buildingCompareData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" tick={{fontSize: 11}} />
+                <YAxis tickFormatter={(val) => `¥${(val/10000).toFixed(0)}만`} />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend />
+                <Bar
+                  dataKey="current"
+                  name={useCustomDate ? "선택 기간" : currentPeriodInfo.label}
+                  fill="#4CAF50"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="compare"
+                  name={useCustomDate ? "전년 동기" : comparePeriodInfo.label}
+                  fill="#BDBDBD"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {Object.keys(roomData).sort().map(bName => (
-            <div key={bName} className="building-section">
-              <div className="building-title" style={{ color: "#2E7D32" }}>🏢 {bName} 상세 매출</div>
-              <div className="table-card">
-                <table className="table-full">
-                  <thead>
-                    <tr>
-                      <th className="text-left">객실명</th>
-                      <th className="text-right">매출액</th>
-                      <th className="text-right">기여도</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(roomData[bName])
-                      .sort((a, b) => roomData[bName][b] - roomData[bName][a])
-                      .map(rName => {
-                        const val = roomData[bName][rName];
-                        const buildingTotal = buildingData.find(x => x.name === bName)?.value || 1;
-                        const share = ((val / buildingTotal) * 100).toFixed(1);
-                        
+          {/* 건물별 상세 매출 (객실별 비교 포함) */}
+          {BUILDING_ORDER.filter(bName => roomData[bName] || roomCompareData[bName]).map(bName => {
+            const currentTotal = buildingCompareData.find(b => b.name === bName)?.current || 0;
+            const compareTotal = buildingCompareData.find(b => b.name === bName)?.compare || 0;
+            const growthRate = getGrowthRate(currentTotal, compareTotal);
+
+            // 객실 목록 (현재 + 비교 기수 합친 유니크 목록)
+            const allRooms = [...new Set([
+              ...Object.keys(roomData[bName] || {}),
+              ...Object.keys(roomCompareData[bName] || {})
+            ])].sort();
+
+            if (allRooms.length === 0) return null;
+
+            return (
+              <div key={bName} className="building-section">
+                <div className="building-title" style={{
+                  color: "#2E7D32",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <span>🏢 {bName}</span>
+                  <span style={{ fontSize: "14px", fontWeight: "normal" }}>
+                    {formatCurrency(currentTotal)}
+                    {growthRate !== null && (
+                      <span style={{
+                        marginLeft: "10px",
+                        color: growthRate >= 0 ? "#FF3B30" : "#0071E3",
+                        fontSize: "13px"
+                      }}>
+                        ({growthRate >= 0 ? '+' : ''}{growthRate}%)
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="table-card">
+                  <table className="table-full">
+                    <thead>
+                      <tr>
+                        <th className="text-left" style={{ width: "20%" }}>객실명</th>
+                        <th className="text-right">{useCustomDate ? "선택기간" : currentPeriodInfo.label}</th>
+                        <th className="text-right">{useCustomDate ? "전년동기" : comparePeriodInfo.label}</th>
+                        <th className="text-right">증감</th>
+                        <th className="text-right">성장률</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allRooms.map(rName => {
+                        const currentVal = roomData[bName]?.[rName] || 0;
+                        const compareVal = roomCompareData[bName]?.[rName] || 0;
+                        const diff = currentVal - compareVal;
+                        const roomGrowth = getGrowthRate(currentVal, compareVal);
+
                         return (
                           <tr key={rName}>
                             <td className="text-left" style={{fontWeight: "600"}}>{rName}</td>
-                            <td className="text-right" style={{color: "#333"}}>{formatCurrency(val)}</td>
-                            <td className="text-right" style={{color: "#888"}}>{share}%</td>
+                            <td className="text-right" style={{color: "#2E7D32", fontWeight: "600"}}>
+                              {formatCurrency(currentVal)}
+                            </td>
+                            <td className="text-right" style={{color: "#888"}}>
+                              {formatCurrency(compareVal)}
+                            </td>
+                            <td className="text-right" style={{
+                              color: diff >= 0 ? "#FF3B30" : "#0071E3",
+                              fontWeight: "500"
+                            }}>
+                              {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
+                            </td>
+                            <td className="text-right" style={{
+                              color: roomGrowth >= 0 ? "#FF3B30" : "#0071E3"
+                            }}>
+                              {roomGrowth !== null
+                                ? `${roomGrowth >= 0 ? '+' : ''}${roomGrowth}%`
+                                : '-'
+                              }
+                            </td>
                           </tr>
                         );
                       })}
-                  </tbody>
-                </table>
+                      {/* 건물 합계 */}
+                      <tr style={{ background: "#F5F5F7", fontWeight: "bold" }}>
+                        <td className="text-left">합계</td>
+                        <td className="text-right" style={{color: "#2E7D32"}}>{formatCurrency(currentTotal)}</td>
+                        <td className="text-right" style={{color: "#666"}}>{formatCurrency(compareTotal)}</td>
+                        <td className="text-right" style={{
+                          color: currentTotal - compareTotal >= 0 ? "#FF3B30" : "#0071E3"
+                        }}>
+                          {currentTotal - compareTotal >= 0 ? '+' : ''}{formatCurrency(currentTotal - compareTotal)}
+                        </td>
+                        <td className="text-right" style={{
+                          color: growthRate >= 0 ? "#FF3B30" : "#0071E3"
+                        }}>
+                          {growthRate !== null ? `${growthRate >= 0 ? '+' : ''}${growthRate}%` : '-'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
     </div>

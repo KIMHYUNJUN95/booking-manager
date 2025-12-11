@@ -136,7 +136,8 @@ function normalize(b, propKey, building) {
 }
 
 async function fetchFromBeds24() {
-    const arrivalFrom = "20240101";
+    // ★ 2023년 1월부터 데이터 가져오기 (기수별 비교를 위해)
+    const arrivalFrom = "20230101";
     const arrivalTo = dayjs().add(24, "month").format("YYYYMMDD"); 
 
     const tasks = PROPERTIES.map(async (prop) => {

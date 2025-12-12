@@ -28,16 +28,25 @@ const getDaysInMonth = (year, month) => {
   return new Date(year, month, 0).getDate();
 };
 
-// 날짜 범위가 겹치는 일수 계산
-const getOverlapDays = (start1, end1, start2, end2) => {
-  const startDate = new Date(Math.max(new Date(start1), new Date(start2)));
-  const endDate = new Date(Math.min(new Date(end1), new Date(end2)));
+// 예약된 날짜들을 Set으로 계산 (겹침 제거)
+const getOccupiedDaysSet = (reservations, monthStart, monthEnd) => {
+  const occupiedDates = new Set();
 
-  if (startDate > endDate) return 0;
+  reservations.forEach(r => {
+    const resStart = new Date(Math.max(new Date(r.arrival), new Date(monthStart)));
+    const resEnd = new Date(Math.min(new Date(r.departure), new Date(monthEnd)));
 
-  const diffTime = endDate - startDate;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  return diffDays;
+    if (resStart <= resEnd) {
+      // 예약 기간의 모든 날짜를 Set에 추가
+      const current = new Date(resStart);
+      while (current <= resEnd) {
+        occupiedDates.add(current.toISOString().slice(0, 10));
+        current.setDate(current.getDate() + 1);
+      }
+    }
+  });
+
+  return occupiedDates.size;
 };
 
 const OccupancyRateDashboard = () => {
@@ -110,11 +119,8 @@ const OccupancyRateDashboard = () => {
               r.departure >= m.start
             );
 
-            // 예약된 일수 합산
-            let occupiedDays = 0;
-            roomReservations.forEach(r => {
-              occupiedDays += getOverlapDays(r.arrival, r.departure, m.start, m.end);
-            });
+            // 겹침을 제거한 실제 예약된 일수 계산
+            const occupiedDays = getOccupiedDaysSet(roomReservations, m.start, m.end);
 
             totalOccupiedDays += occupiedDays;
             totalAvailableDays += m.days;
@@ -155,10 +161,8 @@ const OccupancyRateDashboard = () => {
             r.departure >= monthStart
           );
 
-          let occupiedDays = 0;
-          roomReservations.forEach(r => {
-            occupiedDays += getOverlapDays(r.arrival, r.departure, monthStart, monthEnd);
-          });
+          // 겹침을 제거한 실제 예약된 일수 계산
+          const occupiedDays = getOccupiedDaysSet(roomReservations, monthStart, monthEnd);
 
           const availableDays = daysInMonth;
           const vacantDays = availableDays - occupiedDays;

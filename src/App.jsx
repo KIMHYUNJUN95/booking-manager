@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { db, auth } from './firebase';
 import RevenueDashboard from './RevenueDashboard.jsx';
 import CleaningDashboard from './components/CleaningDashboard.jsx';
+import OccupancyRateDashboard from './components/OccupancyRateDashboard.jsx';
 
 // ★★★ 서버 주소 ★★★
 const GET_ARRIVALS_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/getTodayArrivals";
@@ -159,7 +160,7 @@ const moreStyles = `
       margin: 0;
     }
 
-    /* 모바일에서 주요 메뉴 4개만 표시 (예약접수, 매출, 입퇴실, 청소) */
+    /* 모바일에서 주요 메뉴 5개만 표시 (예약접수, 매출, 가동률, 입퇴실, 청소) */
     .nav-item {
       display: none !important;
     }
@@ -167,7 +168,8 @@ const moreStyles = `
     .nav-item:nth-child(1),
     .nav-item:nth-child(2),
     .nav-item:nth-child(4),
-    .nav-item:nth-child(5) {
+    .nav-item:nth-child(5),
+    .nav-item:nth-child(6) {
       display: flex !important;
       flex-direction: column !important;
       align-items: center !important;
@@ -176,7 +178,7 @@ const moreStyles = `
       font-size: 9px !important;
       gap: 2px !important;
       min-width: auto !important;
-      width: 25% !important;
+      width: 20% !important;
       text-align: center !important;
       border-radius: 8px !important;
       background: transparent !important;
@@ -186,7 +188,8 @@ const moreStyles = `
     .nav-item.active:nth-child(1),
     .nav-item.active:nth-child(2),
     .nav-item.active:nth-child(4),
-    .nav-item.active:nth-child(5) {
+    .nav-item.active:nth-child(5),
+    .nav-item.active:nth-child(6) {
       background: rgba(0,113,227,0.1) !important;
       color: #0071E3 !important;
       box-shadow: none !important;
@@ -302,7 +305,8 @@ const moreStyles = `
     .nav-item:nth-child(1),
     .nav-item:nth-child(2),
     .nav-item:nth-child(4),
-    .nav-item:nth-child(5) {
+    .nav-item:nth-child(5),
+    .nav-item:nth-child(6) {
       font-size: 8px !important;
     }
 
@@ -401,6 +405,7 @@ function Sidebar({ onSync }) {
     { path: "/", label: "예약 접수 대시보드", icon: "📊" },
     { path: "/revenue", label: "매출 대시보드", icon: "💰" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
+    { path: "/occupancy-rate", label: "객실 가동률", icon: "📈" },
     { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
     { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
   ];
@@ -1409,6 +1414,7 @@ function App() {
               <Route path="/" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
+              <Route path="/occupancy-rate" element={<OccupancyRateDashboard />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
               <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>

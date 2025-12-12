@@ -14,7 +14,8 @@
     }
   ],
   "hosting": {
-    "public": "public",
+    "site": "my-booking-app-3f0e7",
+    "public": "build",
     "ignore": [
       "firebase.json",
       "**/.*",

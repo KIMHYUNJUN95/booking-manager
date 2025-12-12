@@ -17,4 +17,5 @@ const firebaseConfig = {
 // 여기서 딱 한 번 초기화하고 내보냅니다.
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
 export const auth = getAuth(app);

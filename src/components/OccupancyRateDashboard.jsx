@@ -97,17 +97,20 @@ const OccupancyRateDashboard = () => {
       const oldestMonth = monthsToFetch[0];
       const latestMonth = monthsToFetch[monthsToFetch.length - 1];
 
+      // 모든 예약 데이터 가져오기 (status 필터 제거 - 취소 제외는 클라이언트에서 처리)
       const q = query(
         collection(db, "reservations"),
-        where("status", "==", "confirmed"),
-        where("arrival", "<=", latestMonth.end)  // arrival 기준으로 변경
+        where("arrival", "<=", latestMonth.end)  // arrival 기준
       );
 
       const snapshot = await getDocs(q);
-      const allReservations = snapshot.docs.map(d => d.data());
+      // 취소된 예약만 제외 (confirmed 예약만 가동률에 포함)
+      const allReservations = snapshot.docs
+        .map(d => d.data())
+        .filter(r => r.status === "confirmed");
 
       // 디버깅: 조회된 예약 데이터 확인
-      console.log(`📊 가동률 계산: 총 ${allReservations.length}건의 예약 데이터 조회됨`);
+      console.log(`📊 가동률 계산: 총 ${allReservations.length}건의 confirmed 예약 데이터 조회됨`);
       console.log(`📅 조회 기간: ${oldestMonth.start} ~ ${latestMonth.end}`);
 
       // 아라키초A 201호의 12월 예약만 필터링해서 확인
@@ -121,12 +124,27 @@ const OccupancyRateDashboard = () => {
         r.arrival <= selMonthEnd &&
         r.departure >= `${selectedMonth}-01`
       );
-      console.log(`🏠 아라키초A 201호 (${selectedMonth}): ${testRoom.length}건`, testRoom);
+      console.log(`🏠 아라키초A 201호 (${selectedMonth}): ${testRoom.length}건`);
+
+      // 각 예약의 날짜 출력
+      testRoom.forEach((r, idx) => {
+        console.log(`  예약 ${idx + 1}: ${r.arrival} ~ ${r.departure} (${r.guestName || '이름없음'})`);
+      });
 
       // 아라키초A 201호의 실제 점유 날짜 계산
       const testOccupiedDays = getOccupiedDaysSet(testRoom, `${selectedMonth}-01`, selMonthEnd);
-      console.log(`📅 아라키초A 201호 점유일수: ${testOccupiedDays}일 / ${selDays}일 (가동률: ${(testOccupiedDays/selDays*100).toFixed(1)}%)`);
+      console.log(`📅 아라키초A 201호 점유일수: ${testOccupiedDays}일 / ${selDays}일`);
+      console.log(`📊 가동률: ${(testOccupiedDays/selDays*100).toFixed(1)}%`);
       console.log(`🔍 공실일수: ${selDays - testOccupiedDays}일`);
+
+      // 베드24와 비교 (12월은 31일, 빈날 6일 예상: 3,4,16,17,18,28)
+      const expectedVacant = 6; // 베드24 스크린샷 기준
+      const actualVacant = selDays - testOccupiedDays;
+      if (Math.abs(expectedVacant - actualVacant) > 1) {
+        console.warn(`⚠️ 불일치: 베드24 예상 공실 ${expectedVacant}일, 실제 계산 ${actualVacant}일`);
+      } else {
+        console.log(`✅ 베드24와 일치!`);
+      }
 
       // ===== 월별 가동률 계산 =====
       const monthlyRates = monthsToFetch.map(m => {

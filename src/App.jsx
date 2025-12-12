@@ -106,6 +106,171 @@ const moreStyles = `
   
   .btn-edit { background: #E5E5EA; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; margin-right: 6px; font-size: 12px; }
   .btn-delete { background: #FFE5E5; color: #FF3B30; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+
+  /* ========================================== */
+  /* 모바일 반응형 CSS (768px 이하) */
+  /* ========================================== */
+  @media (max-width: 768px) {
+    body { overflow: auto; }
+
+    /* 레이아웃 변경 - 사이드바 숨김 */
+    .dashboard-layout { flex-direction: column; height: auto; min-height: 100vh; }
+
+    .sidebar {
+      width: 100%;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      top: auto;
+      height: auto;
+      padding: 8px 12px;
+      border-right: none;
+      border-top: 1px solid rgba(0,0,0,0.1);
+      background: rgba(255,255,255,0.98);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .logo-area { display: none; }
+    .sync-btn { display: none; }
+    .logout-btn { display: none; }
+
+    .nav-menu {
+      flex-direction: row;
+      justify-content: space-around;
+      gap: 4px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .nav-item {
+      flex-direction: column;
+      padding: 8px 10px;
+      font-size: 10px;
+      gap: 4px;
+      min-width: 60px;
+      text-align: center;
+      border-radius: 10px;
+    }
+
+    .nav-item span:first-child { font-size: 18px; }
+
+    /* 메인 콘텐츠 */
+    .main-content {
+      padding: 16px;
+      padding-bottom: 100px; /* 하단 네비 공간 */
+      width: 100%;
+    }
+
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .page-title { font-size: 22px; }
+
+    /* KPI 그리드 */
+    .kpi-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .kpi-card { padding: 16px; }
+    .kpi-value { font-size: 24px; }
+
+    /* 차트 */
+    .charts-grid { grid-template-columns: 1fr; gap: 16px; }
+    .chart-card { padding: 12px; margin-bottom: 16px; }
+    .chart-title { font-size: 16px; margin-bottom: 12px; }
+
+    /* 테이블 */
+    .table-card {
+      padding: 12px;
+      margin-bottom: 16px;
+      border-radius: 12px;
+    }
+
+    .table-full th, .table-full td {
+      padding: 8px 6px;
+      font-size: 12px;
+    }
+
+    .table-full { min-width: 600px; }
+
+    /* 모달 */
+    .modal-content {
+      margin: 16px;
+      max-width: calc(100vw - 32px);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .modal-title { font-size: 18px; }
+
+    /* 로그인 */
+    .login-card {
+      margin: 20px;
+      padding: 24px;
+      max-width: calc(100vw - 40px);
+    }
+
+    /* 폼 */
+    .form-wrapper {
+      padding: 20px;
+      max-width: 100%;
+    }
+
+    .form-input, .form-select, .input-field {
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    /* 스위치 버튼 */
+    .switch-container {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .switch-btn {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    /* Recent Box 숨김 */
+    .recent-box { display: none; }
+
+    /* 건물 섹션 */
+    .building-section { margin-bottom: 20px; }
+    .building-title { font-size: 16px !important; }
+  }
+
+  /* 아주 작은 화면 (480px 이하) */
+  @media (max-width: 480px) {
+    .nav-item {
+      min-width: 50px;
+      padding: 6px 8px;
+      font-size: 9px;
+    }
+    .nav-item span:first-child { font-size: 16px; }
+
+    .main-content { padding: 12px; padding-bottom: 90px; }
+    .page-title { font-size: 20px; }
+    .kpi-value { font-size: 22px; }
+
+    .dashboard-header > div {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .form-input, .form-select { width: 100% !important; }
+  }
 `;
 
 // --- Inject both style blocks ---
@@ -1376,6 +1541,132 @@ function ArrivalsDashboard() {
 }
 
 // ==============================
+// PWA 설치 프롬프트 컴포넌트
+// ==============================
+function InstallPrompt({ onClose }) {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    // 이미 설치된 경우 또는 이미 거절한 경우 표시하지 않음
+    const dismissed = localStorage.getItem('pwa-install-dismissed');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+    if (dismissed || isStandalone) {
+      onClose();
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // iOS Safari 등 beforeinstallprompt를 지원하지 않는 브라우저에서도 표시
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS && !isStandalone) {
+      setShowPrompt(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, [onClose]);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setShowPrompt(false);
+        onClose();
+      }
+      setDeferredPrompt(null);
+    } else {
+      // iOS Safari의 경우 안내 메시지 표시
+      alert('iOS에서 설치하려면:\n\n1. 하단의 공유 버튼 (📤)을 탭하세요\n2. "홈 화면에 추가"를 선택하세요');
+    }
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem('pwa-install-dismissed', 'true');
+    setShowPrompt(false);
+    onClose();
+  };
+
+  if (!showPrompt) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '100px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white',
+      padding: '16px 24px',
+      borderRadius: '16px',
+      boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      maxWidth: '90vw',
+      animation: 'slideUp 0.3s ease-out'
+    }}>
+      <style>{`
+        @keyframes slideUp {
+          from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+          to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+      `}</style>
+      <span style={{ fontSize: '32px' }}>🏨</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '4px' }}>
+          HARU Dashboard 설치
+        </div>
+        <div style={{ fontSize: '13px', opacity: 0.9 }}>
+          앱처럼 바로 접속할 수 있습니다
+        </div>
+      </div>
+      <button
+        onClick={handleInstall}
+        style={{
+          background: 'white',
+          color: '#667eea',
+          border: 'none',
+          padding: '10px 20px',
+          borderRadius: '10px',
+          fontWeight: '700',
+          fontSize: '14px',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        설치하기
+      </button>
+      <button
+        onClick={handleDismiss}
+        style={{
+          background: 'transparent',
+          color: 'white',
+          border: 'none',
+          fontSize: '20px',
+          cursor: 'pointer',
+          padding: '4px',
+          opacity: 0.7
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ==============================
 // 🌐 App — 루트 컴포넌트
 // ==============================
 function App() {
@@ -1383,6 +1674,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [globalMonth, setGlobalMonth] = useState(new Date().toISOString().slice(0, 7));
   const [syncing, setSyncing] = useState(false);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(true);
 
   const handleSync = async () => {
     if (!window.confirm("Beds24에서 최신 예약을 가져오시겠습니까?\n(약 10초 정도 소요됩니다)")) return;
@@ -1420,6 +1712,10 @@ function App() {
   return (
     <>
       <style>{styles}</style>
+      {/* PWA 설치 프롬프트 */}
+      {showInstallPrompt && (
+        <InstallPrompt onClose={() => setShowInstallPrompt(false)} />
+      )}
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="dashboard-layout">
           <Sidebar onSync={handleSync} />

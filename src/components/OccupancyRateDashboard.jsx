@@ -29,12 +29,15 @@ const getDaysInMonth = (year, month) => {
 };
 
 // 예약된 날짜들을 Set으로 계산 (겹침 제거)
+// ★ 중요: departure(체크아웃 날짜)는 비어있는 날로 처리 (체크아웃하면 그날은 비어있음)
 const getOccupiedDaysSet = (reservations, monthStart, monthEnd) => {
   const occupiedDates = new Set();
 
   reservations.forEach(r => {
     const resStart = new Date(Math.max(new Date(r.arrival), new Date(monthStart)));
+    // ★ departure는 제외 (departure - 1일까지만 점유)
     const resEnd = new Date(Math.min(new Date(r.departure), new Date(monthEnd)));
+    resEnd.setDate(resEnd.getDate() - 1); // 체크아웃 당일은 제외
 
     if (resStart <= resEnd) {
       // 예약 기간의 모든 날짜를 Set에 추가
@@ -118,32 +121,67 @@ const OccupancyRateDashboard = () => {
       const selDays = getDaysInMonth(selYear, selMonth);
       const selMonthEnd = `${selectedMonth}-${String(selDays).padStart(2, '0')}`;
 
-      const testRoom = allReservations.filter(r =>
-        r.building === "아라키초A" &&
-        r.room === "201호" &&
-        r.arrival <= selMonthEnd &&
-        r.departure >= `${selectedMonth}-01`
-      );
+      // ★ 중요: 해당 월에 숙박한 예약만 (체크인이 그 달이거나, 체크아웃이 그 달인 경우)
+      // 단, 체크인/체크아웃 모두 그 달 밖이면 제외
+      const testRoom = allReservations.filter(r => {
+        if (r.building !== "아라키초A" || r.room !== "201호") return false;
+
+        // 예약의 실제 숙박 기간이 선택한 월과 겹치는지 확인
+        // arrival이 월 끝보다 작거나 같고, departure가 월 시작보다 크거나 같으면 겹침
+        return r.arrival <= selMonthEnd && r.departure > `${selectedMonth}-01`;
+      });
+
       console.log(`🏠 아라키초A 201호 (${selectedMonth}): ${testRoom.length}건`);
 
-      // 각 예약의 날짜 출력
+      // 각 예약의 날짜와 예약 접수일 출력
       testRoom.forEach((r, idx) => {
-        console.log(`  예약 ${idx + 1}: ${r.arrival} ~ ${r.departure} (${r.guestName || '이름없음'})`);
+        const bookMonth = r.bookDate ? r.bookDate.slice(0, 7) : '알수없음';
+        console.log(`  예약 ${idx + 1}: ${r.arrival} ~ ${r.departure} | 예약접수: ${bookMonth} | ${r.guestName || '이름없음'}`);
       });
 
       // 아라키초A 201호의 실제 점유 날짜 계산
       const testOccupiedDays = getOccupiedDaysSet(testRoom, `${selectedMonth}-01`, selMonthEnd);
+
+      // 점유된 날짜 리스트 출력 (디버깅용)
+      const occupiedDatesList = new Set();
+      testRoom.forEach(r => {
+        const resStart = new Date(Math.max(new Date(r.arrival), new Date(`${selectedMonth}-01`)));
+        const resEnd = new Date(Math.min(new Date(r.departure), new Date(selMonthEnd)));
+        resEnd.setDate(resEnd.getDate() - 1); // 체크아웃 당일 제외
+
+        if (resStart <= resEnd) {
+          const current = new Date(resStart);
+          while (current <= resEnd) {
+            occupiedDatesList.add(current.getDate());
+            current.setDate(current.getDate() + 1);
+          }
+        }
+      });
+
+      const occupiedDaysArray = Array.from(occupiedDatesList).sort((a, b) => a - b);
+      const vacantDaysArray = [];
+      for (let day = 1; day <= selDays; day++) {
+        if (!occupiedDatesList.has(day)) {
+          vacantDaysArray.push(day);
+        }
+      }
+
       console.log(`📅 아라키초A 201호 점유일수: ${testOccupiedDays}일 / ${selDays}일`);
       console.log(`📊 가동률: ${(testOccupiedDays/selDays*100).toFixed(1)}%`);
-      console.log(`🔍 공실일수: ${selDays - testOccupiedDays}일`);
+      console.log(`✅ 점유된 날: ${occupiedDaysArray.join(', ')}`);
+      console.log(`❌ 비어있는 날: ${vacantDaysArray.join(', ')}`);
+      console.log(`🔍 공실일수: ${vacantDaysArray.length}일`);
 
       // 베드24와 비교 (12월은 31일, 빈날 6일 예상: 3,4,16,17,18,28)
-      const expectedVacant = 6; // 베드24 스크린샷 기준
-      const actualVacant = selDays - testOccupiedDays;
-      if (Math.abs(expectedVacant - actualVacant) > 1) {
-        console.warn(`⚠️ 불일치: 베드24 예상 공실 ${expectedVacant}일, 실제 계산 ${actualVacant}일`);
+      const expectedVacant = [3, 4, 16, 17, 18, 28];
+      const matches = expectedVacant.filter(d => vacantDaysArray.includes(d));
+      console.log(`🎯 베드24 예상 공실: ${expectedVacant.join(', ')}`);
+      console.log(`🎯 일치하는 날: ${matches.join(', ')} (${matches.length}/${expectedVacant.length})`);
+
+      if (vacantDaysArray.length === expectedVacant.length && matches.length === expectedVacant.length) {
+        console.log(`✅ 베드24와 완벽하게 일치!`);
       } else {
-        console.log(`✅ 베드24와 일치!`);
+        console.warn(`⚠️ 불일치 발견!`);
       }
 
       // ===== 월별 가동률 계산 =====

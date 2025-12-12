@@ -5,8 +5,9 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebas
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // ★ 핵심: firebase.js 에서 db, auth 가져오기
-import { db, auth } from './firebase'; 
+import { db, auth } from './firebase';
 import RevenueDashboard from './RevenueDashboard.jsx';
+import CleaningDashboard from './components/CleaningDashboard.jsx';
 
 // ★★★ 서버 주소 ★★★
 const GET_ARRIVALS_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/getTodayArrivals";
@@ -105,6 +106,219 @@ const moreStyles = `
   
   .btn-edit { background: #E5E5EA; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; margin-right: 6px; font-size: 12px; }
   .btn-delete { background: #FFE5E5; color: #FF3B30; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+
+  /* ========================================== */
+  /* 모바일 반응형 CSS (768px 이하) */
+  /* ========================================== */
+  @media (max-width: 768px) {
+    body { overflow: auto; height: auto; }
+
+    /* 레이아웃 변경 */
+    .dashboard-layout {
+      flex-direction: column;
+      height: auto;
+      min-height: 100vh;
+    }
+
+    /* 사이드바 -> 하단 고정 네비게이션 */
+    .sidebar {
+      width: 100%;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      top: auto !important;
+      height: 70px !important;
+      min-height: 70px !important;
+      max-height: 70px !important;
+      padding: 8px 0 12px 0;
+      border-right: none;
+      border-top: 1px solid rgba(0,0,0,0.1);
+      background: rgba(255,255,255,0.98);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 1000;
+      display: flex;
+      flex-direction: row !important;
+      justify-content: center !important;
+      align-items: center !important;
+    }
+
+    .logo-area { display: none !important; }
+    .sync-btn { display: none !important; }
+    .logout-btn { display: none !important; }
+
+    .nav-menu {
+      display: flex !important;
+      flex-direction: row !important;
+      justify-content: space-around !important;
+      align-items: center !important;
+      width: 100%;
+      gap: 0;
+      padding: 0;
+      margin: 0;
+    }
+
+    /* 모바일에서 주요 메뉴 4개만 표시 */
+    .nav-item {
+      display: none !important;
+    }
+
+    .nav-item:nth-child(1),
+    .nav-item:nth-child(2),
+    .nav-item:nth-child(7),
+    .nav-item:nth-child(8) {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 4px 8px !important;
+      font-size: 9px !important;
+      gap: 2px !important;
+      min-width: auto !important;
+      width: 25% !important;
+      text-align: center !important;
+      border-radius: 8px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .nav-item.active:nth-child(1),
+    .nav-item.active:nth-child(2),
+    .nav-item.active:nth-child(7),
+    .nav-item.active:nth-child(8) {
+      background: rgba(0,113,227,0.1) !important;
+      color: #0071E3 !important;
+      box-shadow: none !important;
+    }
+
+    .nav-item span:first-child {
+      font-size: 22px !important;
+      line-height: 1 !important;
+    }
+
+    /* 메인 콘텐츠 */
+    .main-content {
+      padding: 16px;
+      padding-bottom: 90px !important;
+      width: 100%;
+      margin-left: 0 !important;
+    }
+
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .page-title { font-size: 20px; }
+
+    /* KPI 그리드 */
+    .kpi-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .kpi-card { padding: 14px; }
+    .kpi-value { font-size: 22px; }
+    .kpi-label { font-size: 12px; }
+
+    /* 차트 */
+    .charts-grid { grid-template-columns: 1fr; gap: 16px; }
+    .chart-card { padding: 12px; margin-bottom: 16px; }
+    .chart-title { font-size: 14px; margin-bottom: 12px; }
+
+    /* 테이블 */
+    .table-card {
+      padding: 10px;
+      margin-bottom: 16px;
+      border-radius: 12px;
+    }
+
+    .table-full th, .table-full td {
+      padding: 8px 4px;
+      font-size: 11px;
+    }
+
+    .table-full { min-width: 500px; }
+
+    /* 모달 */
+    .modal-content {
+      margin: 16px;
+      max-width: calc(100vw - 32px);
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .modal-title { font-size: 18px; }
+
+    /* 로그인 */
+    .login-card {
+      margin: 20px;
+      padding: 24px;
+      max-width: calc(100vw - 40px);
+    }
+
+    /* 폼 */
+    .form-wrapper {
+      padding: 20px;
+      max-width: 100%;
+    }
+
+    .form-input, .form-select, .input-field {
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    /* 스위치 버튼 */
+    .switch-container {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .switch-btn {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    /* Recent Box 숨김 */
+    .recent-box { display: none; }
+
+    /* 건물 섹션 */
+    .building-section { margin-bottom: 20px; }
+    .building-title { font-size: 14px !important; }
+
+    /* 태그 */
+    .tag-good, .tag-pending, .tag-cancel { font-size: 10px; padding: 3px 6px; }
+  }
+
+  /* 아주 작은 화면 (480px 이하) */
+  @media (max-width: 480px) {
+    .sidebar { height: 65px !important; min-height: 65px !important; max-height: 65px !important; }
+
+    .nav-item span:first-child { font-size: 20px !important; }
+    .nav-item:nth-child(1),
+    .nav-item:nth-child(2),
+    .nav-item:nth-child(7),
+    .nav-item:nth-child(8) {
+      font-size: 8px !important;
+    }
+
+    .main-content { padding: 12px; padding-bottom: 80px !important; }
+    .page-title { font-size: 18px; }
+    .kpi-value { font-size: 20px; }
+    .kpi-grid { grid-template-columns: 1fr; }
+
+    .dashboard-header > div {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .form-input, .form-select { width: 100% !important; }
+  }
 `;
 
 // --- Inject both style blocks ---
@@ -185,12 +399,13 @@ function Sidebar({ onSync }) {
 
   const menu = [
     { path: "/", label: "예약 접수 대시보드", icon: "📊" },
-    { path: "/revenue", label: "매출 대시보드", icon: "💰" }, 
+    { path: "/revenue", label: "매출 대시보드", icon: "💰" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
     { path: "/list", label: "전체 기록 관리", icon: "📋" },
     { path: "/add", label: "예약 입력", icon: "➕" },
     { path: "/add-cancel", label: "취소 입력", icon: "❌" },
-    { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" }, 
+    { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
+    { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
   ];
 
   const logout = () => {
@@ -265,6 +480,119 @@ function DetailModal({ title, data, onClose }) {
             ))
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ==============================
+// 고객 상세 정보 모달
+// ==============================
+function GuestDetailModal({ guest, onClose }) {
+  if (!guest) return null;
+
+  const formatPrice = (price) => {
+    if (!price) return "¥0";
+    const num = parseFloat(String(price).replace(/[^0-9.-]+/g,""));
+    if (isNaN(num)) return "¥0";
+    return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(num);
+  };
+
+  const InfoRow = ({ label, value, icon }) => (
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "14px 0",
+      borderBottom: "1px solid #F2F2F7"
+    }}>
+      <span style={{ color: "#86868B", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <span>{icon}</span> {label}
+      </span>
+      <span style={{ fontWeight: "600", fontSize: "14px", color: value ? "#1D1D1F" : "#CCC", maxWidth: "60%", textAlign: "right", wordBreak: "break-word" }}>
+        {value || "정보 없음"}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
+        <div className="modal-header" style={{ borderBottom: "none", paddingBottom: "0" }}>
+          <div>
+            <div className="modal-title" style={{ fontSize: "22px" }}>고객 상세 정보</div>
+            <div style={{ fontSize: "13px", color: "#86868B", marginTop: "4px" }}>{guest.building} {guest.room}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+
+        {/* 고객 기본 정보 카드 */}
+        <div style={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          borderRadius: "16px",
+          padding: "20px",
+          marginBottom: "20px",
+          color: "white"
+        }}>
+          <div style={{ fontSize: "20px", fontWeight: "700", marginBottom: "8px" }}>
+            {guest.guestName || "(이름 없음)"}
+          </div>
+          <div style={{ display: "flex", gap: "16px", fontSize: "13px", opacity: "0.9" }}>
+            <span>성인 {guest.numAdult || 0}명</span>
+            <span>아동 {guest.numChild || 0}명</span>
+            <span>{guest.platform}</span>
+          </div>
+        </div>
+
+        {/* 상세 정보 */}
+        <div style={{ maxHeight: "350px", overflowY: "auto" }}>
+          <InfoRow icon="📧" label="이메일" value={guest.guestEmail} />
+          <InfoRow icon="📞" label="전화번호" value={guest.guestPhone} />
+          <InfoRow icon="🌍" label="국가" value={guest.guestCountry} />
+          <InfoRow icon="🏠" label="주소" value={guest.guestAddress ? `${guest.guestAddress}${guest.guestCity ? `, ${guest.guestCity}` : ""}` : ""} />
+          <InfoRow icon="🕐" label="도착 예정 시간" value={guest.arrivalTime} />
+          <InfoRow icon="📅" label="체크인" value={guest.arrival} />
+          <InfoRow icon="📅" label="체크아웃" value={guest.departure} />
+          <InfoRow icon="🌙" label="숙박일수" value={guest.nights ? `${guest.nights}박` : ""} />
+          <InfoRow icon="💰" label="총 금액" value={formatPrice(guest.totalPrice || guest.price)} />
+
+          {/* 고객 코멘트 */}
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ color: "#86868B", fontSize: "14px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>💬</span> 고객 코멘트 / 메모
+            </div>
+            <div style={{
+              background: "#F9F9F9",
+              padding: "14px",
+              borderRadius: "12px",
+              fontSize: "14px",
+              color: guest.guestComments ? "#1D1D1F" : "#CCC",
+              minHeight: "60px",
+              lineHeight: "1.5"
+            }}>
+              {guest.guestComments || "코멘트 없음"}
+            </div>
+          </div>
+        </div>
+
+        {/* 닫기 버튼 */}
+        <button
+          onClick={onClose}
+          style={{
+            width: "100%",
+            padding: "14px",
+            marginTop: "20px",
+            background: "#0071E3",
+            color: "white",
+            border: "none",
+            borderRadius: "12px",
+            fontSize: "16px",
+            fontWeight: "600",
+            cursor: "pointer"
+          }}
+        >
+          닫기
+        </button>
       </div>
     </div>
   );
@@ -958,11 +1286,33 @@ function AddCancellation({ initialMonth }) {
 // ==============================
 // 🚪 ArrivalsDashboard (입/퇴실 대시보드)
 // ==============================
+// 건물 정렬 순서 정의
+const BUILDING_ORDER = [
+  "아라키초A", "아라키초B", "다이쿄초", "가부키초",
+  "다카다노바바", "오쿠보A동", "오쿠보B동", "오쿠보C동"
+];
+
+// 건물 순서대로 정렬하는 함수
+const sortByBuildingOrder = (list) => {
+  return [...list].sort((a, b) => {
+    const indexA = BUILDING_ORDER.indexOf(a.building);
+    const indexB = BUILDING_ORDER.indexOf(b.building);
+    // 목록에 없는 건물은 맨 뒤로
+    const orderA = indexA === -1 ? 999 : indexA;
+    const orderB = indexB === -1 ? 999 : indexB;
+    return orderA - orderB;
+  });
+};
+
 function ArrivalsDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [loading, setLoading] = useState(false); 
-  const [guestList, setGuestList] = useState([]); 
+  const [loading, setLoading] = useState(false);
+  const [guestList, setGuestList] = useState([]);
   const [error, setError] = useState("");
+  const [selectedGuest, setSelectedGuest] = useState(null);  // 선택된 고객 (모달용)
+  const [searchQuery, setSearchQuery] = useState("");  // 고객 이름 검색
+  const [searchResults, setSearchResults] = useState([]);  // 검색 결과
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const formatPrice = (price) => {
     if (!price) return "¥0";
@@ -1008,14 +1358,140 @@ function ArrivalsDashboard() {
     fetchTodayArrivals();
   }, [selectedDate]);
 
-  const todayArrivals = guestList.filter(guest => guest.arrival === selectedDate);
-  const todayDepartures = guestList.filter(guest => guest.departure === selectedDate);
+  // 고객 이름 검색 함수
+  const searchGuests = async (queryText) => {
+    if (!queryText || queryText.trim().length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      // Firestore에서 모든 confirmed 예약을 가져와서 클라이언트에서 검색
+      const q = query(
+        collection(db, "reservations"),
+        where("status", "==", "confirmed")
+      );
+      const snapshot = await getDocs(q);
+      const allGuests = snapshot.docs.map(doc => doc.data());
+
+      // 이름으로 필터링 (대소문자 무시)
+      const searchLower = queryText.toLowerCase();
+      const filtered = allGuests.filter(g =>
+        g.guestName && g.guestName.toLowerCase().includes(searchLower)
+      );
+
+      // 도착일 기준 정렬 (최근 것 먼저)
+      filtered.sort((a, b) => {
+        if (!a.arrival) return 1;
+        if (!b.arrival) return -1;
+        return b.arrival.localeCompare(a.arrival);
+      });
+
+      setSearchResults(filtered.slice(0, 20)); // 최대 20개
+      setShowSearchResults(true);
+    } catch (err) {
+      console.error("검색 오류:", err);
+      setSearchResults([]);
+    }
+  };
+
+  // 검색어 변경 시 디바운스 적용
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchGuests(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // 선택한 날짜의 입실/퇴실 필터링 후 건물 순서대로 정렬
+  const todayArrivals = sortByBuildingOrder(guestList.filter(guest => guest.arrival === selectedDate));
+  const todayDepartures = sortByBuildingOrder(guestList.filter(guest => guest.departure === selectedDate));
 
   return (
     <div className="dashboard-content">
+      {/* 고객 상세 모달 */}
+      {selectedGuest && (
+        <GuestDetailModal
+          guest={selectedGuest}
+          onClose={() => setSelectedGuest(null)}
+        />
+      )}
+
       <div className="dashboard-header">
         <h2 className="page-title">🚪 입/퇴실 관리</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {/* 고객 검색 */}
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="🔍 고객 이름 검색..."
+              style={{ marginBottom: 0, width: "200px" }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
+              onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+            />
+            {/* 검색 결과 드롭다운 */}
+            {showSearchResults && searchResults.length > 0 && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                background: "white",
+                borderRadius: "12px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                zIndex: 1000,
+                maxHeight: "300px",
+                overflowY: "auto",
+                marginTop: "4px"
+              }}>
+                {searchResults.map((guest, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedGuest(guest);
+                      setShowSearchResults(false);
+                      setSearchQuery("");
+                    }}
+                    style={{
+                      padding: "12px 16px",
+                      borderBottom: "1px solid #F2F2F7",
+                      cursor: "pointer",
+                      transition: "background 0.2s"
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = "#F5F5F7"}
+                    onMouseLeave={(e) => e.target.style.background = "white"}
+                  >
+                    <div style={{ fontWeight: "600", fontSize: "14px" }}>{guest.guestName}</div>
+                    <div style={{ fontSize: "12px", color: "#86868B" }}>
+                      {guest.building} {guest.room} | {guest.arrival} ~ {guest.departure}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showSearchResults && searchQuery.length >= 2 && searchResults.length === 0 && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                background: "white",
+                borderRadius: "12px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                zIndex: 1000,
+                padding: "20px",
+                textAlign: "center",
+                color: "#86868B",
+                marginTop: "4px"
+              }}>
+                검색 결과가 없습니다
+              </div>
+            )}
+          </div>
           <input type="date" className="form-input" style={{ marginBottom: 0, width: "160px", fontWeight: "bold" }} value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
           <button className="btn-primary" style={{ width: "auto", padding: "10px 20px" }} onClick={fetchTodayArrivals}>🔄 새로고침</button>
         </div>
@@ -1037,12 +1513,25 @@ function ArrivalsDashboard() {
               <p style={{ textAlign: "center", color: "#aaa", padding: "20px" }}>{selectedDate} 입실 예정자가 없습니다.</p>
             ) : (
               <table className="table-full">
-                <thead><tr><th>객실</th><th>게스트 이름</th><th>플랫폼</th><th>숙박 기간</th><th>총 금액</th><th>상태</th></tr></thead>
+                <thead><tr><th>객실</th><th>게스트 이름</th><th>인원</th><th>플랫폼</th><th>숙박 기간</th><th>총 금액</th><th>상태</th></tr></thead>
                 <tbody>
                   {todayArrivals.map((g, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: "bold" }}>{g.building} {g.room}</td>
-                      <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
+                      <td>
+                        <span
+                          onClick={() => setSelectedGuest(g)}
+                          style={{
+                            cursor: "pointer",
+                            color: "#0071E3",
+                            textDecoration: "underline",
+                            fontWeight: "500"
+                          }}
+                        >
+                          {g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: "13px" }}>성인 {g.numAdult || 0}, 아동 {g.numChild || 0}</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
                       <td style={{ fontSize: "13px", color: "#666" }}>{g.arrival} ~ {g.departure}</td>
                       <td style={{ fontWeight: "bold" }}>{formatPrice(g.totalPrice || g.price)}</td>
@@ -1063,12 +1552,25 @@ function ArrivalsDashboard() {
               <p style={{ textAlign: "center", color: "#aaa", padding: "20px" }}>{selectedDate} 퇴실 예정자가 없습니다.</p>
             ) : (
               <table className="table-full">
-                <thead><tr><th>객실</th><th>게스트 이름</th><th>체크인 날짜</th><th>플랫폼</th><th>총 금액</th><th>상태</th></tr></thead>
+                <thead><tr><th>객실</th><th>게스트 이름</th><th>인원</th><th>체크인 날짜</th><th>플랫폼</th><th>총 금액</th><th>상태</th></tr></thead>
                 <tbody>
                   {todayDepartures.map((g, i) => (
                     <tr key={i}>
                       <td style={{ fontWeight: "bold" }}>{g.building} {g.room}</td>
-                      <td>{g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}</td>
+                      <td>
+                        <span
+                          onClick={() => setSelectedGuest(g)}
+                          style={{
+                            cursor: "pointer",
+                            color: "#0071E3",
+                            textDecoration: "underline",
+                            fontWeight: "500"
+                          }}
+                        >
+                          {g.guestName || <span style={{color:'#ccc'}}>(이름없음)</span>}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: "13px" }}>성인 {g.numAdult || 0}, 아동 {g.numChild || 0}</td>
                       <td style={{ color: "#0071E3", fontWeight: "600" }}>{g.arrival} (입실일)</td>
                       <td><span className={getPlatformClass(g.platform)}>{g.platform || "Unknown"}</span></td>
                       <td>{formatPrice(g.totalPrice || g.price)}</td>
@@ -1087,6 +1589,132 @@ function ArrivalsDashboard() {
 }
 
 // ==============================
+// PWA 설치 프롬프트 컴포넌트
+// ==============================
+function InstallPrompt({ onClose }) {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    // 이미 설치된 경우 또는 이미 거절한 경우 표시하지 않음
+    const dismissed = localStorage.getItem('pwa-install-dismissed');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+    if (dismissed || isStandalone) {
+      onClose();
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // iOS Safari 등 beforeinstallprompt를 지원하지 않는 브라우저에서도 표시
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS && !isStandalone) {
+      setShowPrompt(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, [onClose]);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setShowPrompt(false);
+        onClose();
+      }
+      setDeferredPrompt(null);
+    } else {
+      // iOS Safari의 경우 안내 메시지 표시
+      alert('iOS에서 설치하려면:\n\n1. 하단의 공유 버튼 (📤)을 탭하세요\n2. "홈 화면에 추가"를 선택하세요');
+    }
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem('pwa-install-dismissed', 'true');
+    setShowPrompt(false);
+    onClose();
+  };
+
+  if (!showPrompt) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '100px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white',
+      padding: '16px 24px',
+      borderRadius: '16px',
+      boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      maxWidth: '90vw',
+      animation: 'slideUp 0.3s ease-out'
+    }}>
+      <style>{`
+        @keyframes slideUp {
+          from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+          to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+      `}</style>
+      <span style={{ fontSize: '32px' }}>🏨</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '4px' }}>
+          HARU Dashboard 설치
+        </div>
+        <div style={{ fontSize: '13px', opacity: 0.9 }}>
+          앱처럼 바로 접속할 수 있습니다
+        </div>
+      </div>
+      <button
+        onClick={handleInstall}
+        style={{
+          background: 'white',
+          color: '#667eea',
+          border: 'none',
+          padding: '10px 20px',
+          borderRadius: '10px',
+          fontWeight: '700',
+          fontSize: '14px',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        설치하기
+      </button>
+      <button
+        onClick={handleDismiss}
+        style={{
+          background: 'transparent',
+          color: 'white',
+          border: 'none',
+          fontSize: '20px',
+          cursor: 'pointer',
+          padding: '4px',
+          opacity: 0.7
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ==============================
 // 🌐 App — 루트 컴포넌트
 // ==============================
 function App() {
@@ -1094,6 +1722,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [globalMonth, setGlobalMonth] = useState(new Date().toISOString().slice(0, 7));
   const [syncing, setSyncing] = useState(false);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(true);
 
   const handleSync = async () => {
     if (!window.confirm("Beds24에서 최신 예약을 가져오시겠습니까?\n(약 10초 정도 소요됩니다)")) return;
@@ -1131,6 +1760,10 @@ function App() {
   return (
     <>
       <style>{styles}</style>
+      {/* PWA 설치 프롬프트 */}
+      {showInstallPrompt && (
+        <InstallPrompt onClose={() => setShowInstallPrompt(false)} />
+      )}
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="dashboard-layout">
           <Sidebar onSync={handleSync} />
@@ -1143,6 +1776,7 @@ function App() {
               <Route path="/add" element={<AddReservation initialMonth={globalMonth} />} />
               <Route path="/add-cancel" element={<AddCancellation initialMonth={globalMonth} />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
+              <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>
           </main>
         </div>

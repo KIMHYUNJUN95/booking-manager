@@ -93,7 +93,8 @@ function normalize(b, propKey, building) {
     const bookDateStr = determineDate(b);
     
     const arrival = b.firstNight ? b.firstNight.slice(0, 10) : null;
-    const departure = b.lastNight ? b.lastNight.slice(0, 10) : null;
+    // ★ 퇴실일 = lastNight + 1일 (마지막 숙박일 다음날이 실제 체크아웃)
+    const departure = b.lastNight ? dayjs(b.lastNight).add(1, 'day').format('YYYY-MM-DD') : null;
     const stayMonth = arrival ? arrival.slice(0, 7) : null;
 
     const date = bookDateStr; // 대시보드 쿼리 필드 (정확한 예약 접수일)
@@ -120,12 +121,23 @@ function normalize(b, propKey, building) {
         status, rawStatus: String(b.status), platform,
         date, price: totalPrice, nights,
         bookDate: bookDateStr, arrival, departure, stayMonth, totalPrice,
+        numAdult: parseInt(b.numAdult) || 0,
+        numChild: parseInt(b.numChild) || 0,
+        // ★ 고객 상세 정보 추가
+        guestEmail: b.guestEmail || "",
+        guestPhone: b.guestPhone || b.guestMobile || "",
+        guestCountry: b.guestCountry || "",
+        guestAddress: b.guestAddress || "",
+        guestCity: b.guestCity || "",
+        guestComments: b.guestComments || b.notes || "",
+        arrivalTime: b.arrivalTime || "",
         updatedAt: new Date(),
     };
 }
 
 async function fetchFromBeds24() {
-    const arrivalFrom = "20240101";
+    // ★ 2023년 1월부터 데이터 가져오기 (기수별 비교를 위해)
+    const arrivalFrom = "20230101";
     const arrivalTo = dayjs().add(24, "month").format("YYYYMMDD"); 
 
     const tasks = PROPERTIES.map(async (prop) => {

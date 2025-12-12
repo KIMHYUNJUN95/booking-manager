@@ -103,6 +103,19 @@ const OccupancyRateDashboard = () => {
       const snapshot = await getDocs(q);
       const allReservations = snapshot.docs.map(d => d.data());
 
+      // 디버깅: 조회된 예약 데이터 확인
+      console.log(`📊 가동률 계산: 총 ${allReservations.length}건의 예약 데이터 조회됨`);
+      console.log(`📅 조회 기간: ${oldestMonth.start} ~ ${monthsToFetch[monthsToFetch.length - 1].end}`);
+
+      // 아라키초A 201호의 12월 예약만 필터링해서 확인
+      const testRoom = allReservations.filter(r =>
+        r.building === "아라키초A" &&
+        r.room === "201호" &&
+        r.arrival <= `${selectedMonth}-31` &&
+        r.departure >= `${selectedMonth}-01`
+      );
+      console.log(`🏠 아라키초A 201호 (${selectedMonth}): ${testRoom.length}건`, testRoom);
+
       // ===== 월별 가동률 계산 =====
       const monthlyRates = monthsToFetch.map(m => {
         let totalOccupiedDays = 0;

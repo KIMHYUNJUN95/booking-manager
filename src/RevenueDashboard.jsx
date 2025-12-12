@@ -527,7 +527,7 @@ const RevenueDashboard = () => {
                             <td className="text-right" style={{
                               color: diff >= 0 ? "#FF3B30" : "#0071E3",
                               fontWeight: "500"
-                            }}>
+                            }}> 
                               {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
                             </td>
                             <td className="text-right" style={{

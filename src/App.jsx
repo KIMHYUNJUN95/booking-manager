@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { collection, addDoc, getDocs, query, where, deleteDoc, doc, orderBy, updateDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -159,15 +159,15 @@ const moreStyles = `
       margin: 0;
     }
 
-    /* 모바일에서 주요 메뉴 4개만 표시 */
+    /* 모바일에서 주요 메뉴 4개만 표시 (예약접수, 매출, 입퇴실, 청소) */
     .nav-item {
       display: none !important;
     }
 
     .nav-item:nth-child(1),
     .nav-item:nth-child(2),
-    .nav-item:nth-child(7),
-    .nav-item:nth-child(8) {
+    .nav-item:nth-child(4),
+    .nav-item:nth-child(5) {
       display: flex !important;
       flex-direction: column !important;
       align-items: center !important;
@@ -185,8 +185,8 @@ const moreStyles = `
 
     .nav-item.active:nth-child(1),
     .nav-item.active:nth-child(2),
-    .nav-item.active:nth-child(7),
-    .nav-item.active:nth-child(8) {
+    .nav-item.active:nth-child(4),
+    .nav-item.active:nth-child(5) {
       background: rgba(0,113,227,0.1) !important;
       color: #0071E3 !important;
       box-shadow: none !important;
@@ -301,8 +301,8 @@ const moreStyles = `
     .nav-item span:first-child { font-size: 20px !important; }
     .nav-item:nth-child(1),
     .nav-item:nth-child(2),
-    .nav-item:nth-child(7),
-    .nav-item:nth-child(8) {
+    .nav-item:nth-child(4),
+    .nav-item:nth-child(5) {
       font-size: 8px !important;
     }
 
@@ -401,9 +401,6 @@ function Sidebar({ onSync }) {
     { path: "/", label: "예약 접수 대시보드", icon: "📊" },
     { path: "/revenue", label: "매출 대시보드", icon: "💰" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
-    { path: "/list", label: "전체 기록 관리", icon: "📋" },
-    { path: "/add", label: "예약 입력", icon: "➕" },
-    { path: "/add-cancel", label: "취소 입력", icon: "❌" },
     { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
     { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
   ];
@@ -593,50 +590,6 @@ function GuestDetailModal({ guest, onClose }) {
         >
           닫기
         </button>
-      </div>
-    </div>
-  );
-}
-
-// ==============================
-// 기록 수정 모달
-// ==============================
-function EditModal({ record, onClose, onSave }) {
-  const [bookDate, setBookDate] = useState(record.date || record.bookDate);
-  const [stayMonth, setStayMonth] = useState(record.stayMonth);
-  const [platform, setPlatform] = useState(record.platform);
-
-  const handleSave = () => {
-    onSave({ ...record, bookDate, date: bookDate, stayMonth, platform });
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: "400px" }}>
-        <div className="modal-header">
-          <div className="modal-title">기록 수정</div>
-          <button className="modal-close" onClick={onClose}>&times;</button>
-        </div>
-        <div className="form-wrapper" style={{ boxShadow: "none", padding: 0 }}>
-          <label className="input-label">건물/객실</label>
-          <div style={{ padding: "12px", background: "#F2F2F7", borderRadius: "10px", marginBottom: "20px", color: "#86868B" }}>
-            {record.building} {record.room}
-          </div>
-          <label className="input-label">접수일</label>
-          <input className="input-field" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
-          <label className="input-label">숙박 월</label>
-          <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} />
-          <label className="input-label">플랫폼</label>
-          <select className="input-field" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-            <option value="Airbnb">Airbnb</option>
-            <option value="Booking">Booking.com</option>
-            <option value="Direct">직접 예약 (Direct)</option>
-          </select>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button className="btn-primary" style={{ backgroundColor: "#86868B" }} onClick={onClose}>취소</button>
-            <button className="btn-primary" onClick={handleSave}>저장하기</button>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -963,322 +916,6 @@ function OccupancyDashboard({ targetMonth, setTargetMonth }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-// ==============================
-// 📋 RecordList — 전체 기록 관리
-// ==============================
-function RecordList({ targetMonth, setTargetMonth }) {
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedBuilding, setSelectedBuilding] = useState("전체");
-  const [selectedRoom, setSelectedRoom] = useState("전체");
-  const [editingRecord, setEditingRecord] = useState(null);
-
-  const fetchRecords = async () => {
-    setLoading(true);
-    // date 기준으로 조회 + 정렬
-    const q = query(
-      collection(db, "reservations"),
-      where("bookDate", ">=", `${targetMonth}-01`),
-      where("bookDate", "<=", `${targetMonth}-31`),
-      orderBy("date", "desc")
-    );
-    const snapshot = await getDocs(q);
-    setRecords(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchRecords();
-  }, [targetMonth]);
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("삭제하시겠습니까?")) return;
-    await deleteDoc(doc(db, "reservations", id));
-    fetchRecords();
-  };
-
-  const handleSaveEdit = async (updatedRecord) => {
-    try {
-      await updateDoc(doc(db, "reservations", updatedRecord.id), {
-        bookDate: updatedRecord.bookDate,
-        date: updatedRecord.bookDate,
-        stayMonth: updatedRecord.stayMonth,
-        platform: updatedRecord.platform
-      });
-      alert("수정되었습니다.");
-      setEditingRecord(null);
-      fetchRecords();
-    } catch (e) {
-      alert("수정 실패");
-    }
-  };
-
-  const filteredRecords = records.filter((res) => {
-    if (selectedBuilding !== "전체" && res.building !== selectedBuilding) return false;
-    if (selectedRoom !== "전체" && res.room !== selectedRoom) return false;
-    return true;
-  });
-
-  return (
-    <div className="dashboard-content">
-      <div className="dashboard-header">
-        <h2 className="page-title">전체 기록 관리</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <select className="form-select" style={{ width: "auto", marginBottom: 0 }} value={selectedBuilding} onChange={(e) => { setSelectedBuilding(e.target.value); setSelectedRoom("전체"); }}>
-            <option value="전체">전체 건물</option>
-            {Object.keys(BUILDING_DATA).map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          {selectedBuilding !== "전체" && (
-            <select className="form-select" style={{ width: "auto", marginBottom: 0 }} value={selectedRoom} onChange={(e) => setSelectedRoom(e.target.value)}>
-              <option value="전체">전체 객실</option>
-              {BUILDING_DATA[selectedBuilding].map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          )}
-          <span style={{ fontSize: "14px", fontWeight: "600", color: "#86868B", marginLeft: "10px" }}>조회할 접수 월:</span>
-          <input type="month" className="form-select" style={{ width: "auto", marginBottom: 0 }} value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="search-summary" style={{marginBottom: '20px', color: '#666'}}>
-        🔍 검색 결과: {selectedBuilding !== "전체" ? `[${selectedBuilding}] ` : ""}{selectedRoom !== "전체" ? `[${selectedRoom}] ` : ""} 총 <u>{filteredRecords.length}건</u>이 조회되었습니다.
-      </div>
-
-      {editingRecord && <EditModal record={editingRecord} onClose={() => setEditingRecord(null)} onSave={handleSaveEdit} />}
-
-      <div className="table-card">
-        <table className="table-full">
-          <thead>
-            <tr>
-              <th className="text-left">접수일</th>
-              <th className="text-left">숙박월</th>
-              <th>건물/객실</th>
-              <th>플랫폼</th>
-              <th>구분</th>
-              <th>관리</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRecords.map((res) => (
-              <tr key={res.id}>
-                <td className="text-left">{res.date || res.bookDate}</td>
-                <td className="text-left" style={{ fontWeight: "bold", color: "#5856D6" }}>{res.stayMonth}</td>
-                <td>{res.building} {res.room}</td>
-                <td><span className={res.platform === "Airbnb" ? "pf-text-airbnb" : "pf-text-booking"}>{res.platform}</span></td>
-                <td>{res.status === "cancelled" ? <span className="tag-cancel">취소기록</span> : <span className="tag-good">예약확정</span>}</td>
-                <td>
-                  <button onClick={() => setEditingRecord(res)} className="btn-edit">✏️ 수정</button>
-                  <button onClick={() => handleDelete(res.id)} className="btn-delete">🗑️ 삭제</button>
-                </td>
-              </tr>
-            ))}
-            {filteredRecords.length === 0 && (
-              <tr><td colSpan="6" style={{ textAlign: "center", padding: "40px", color: "#86868B" }}>검색 결과가 없습니다.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ==============================
-// ➕ AddReservation — 예약 등록 (수기)
-// ==============================
-function AddReservation({ initialMonth }) {
-  const [bookDate, setBookDate] = useState(new Date().toISOString().slice(0, 10));
-  const [arrival, setArrival] = useState(new Date().toISOString().slice(0, 10)); // 체크인 날짜
-  const [stayMonth, setStayMonth] = useState(initialMonth);
-  
-  const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
-  const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
-  const [platform, setPlatform] = useState("Direct");
-  const [count, setCount] = useState(1);
-  
-  const [nightsCount, setNightsCount] = useState(1); // 박수
-  const [totalPrice, setTotalPrice] = useState(0);   // 총 금액
-  
-  const [recentHistory, setRecentHistory] = useState([]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!window.confirm("저장하시겠습니까?")) return;
-
-    const nightsArr = [];
-    if (nightsCount > 0 && totalPrice > 0) {
-        const daily = Math.round(totalPrice / nightsCount);
-        const baseDate = new Date(arrival);
-        
-        for(let i=0; i<nightsCount; i++) {
-            const d = new Date(baseDate);
-            d.setDate(baseDate.getDate() + i);
-            nightsArr.push({
-                date: d.toISOString().slice(0, 10),
-                amount: daily
-            });
-        }
-    }
-
-    try {
-      const promises = [];
-      for (let i = 0; i < count; i++) {
-        promises.push(addDoc(collection(db, "reservations"), {
-          bookDate: bookDate,
-          date: bookDate,            // ← date도 같이 저장
-          stayMonth: stayMonth,
-          building: selectedBuilding, 
-          room: selectedRoom, 
-          platform: platform, 
-          status: "confirmed",
-          
-          arrival: arrival,
-          totalPrice: Number(totalPrice),
-          nights: nightsArr,
-          
-          createdAt: new Date()
-        }));
-      }
-      await Promise.all(promises);
-      
-      setRecentHistory((prev) => {
-        const newItem = { date: bookDate, room: `${selectedBuilding} ${selectedRoom}`, platform, count };
-        return [newItem, ...prev].slice(0, 5);
-      });
-      alert("완료!");
-    } catch (error) { alert("오류 발생"); }
-  };
-
-  return (
-    <div style={{ display: "flex", gap: "30px", height: "100%", alignItems: "flex-start" }}>
-      <div className="form-wrapper" style={{ flex: 1 }}>
-        <h2 style={{ textAlign: "center", marginBottom: "30px" }}>새 예약 등록 (수기)</h2>
-        <form onSubmit={handleSubmit}>
-          <div style={{display:'flex', gap:'10px'}}>
-             <div style={{flex:1}}>
-                <label className="input-label">접수일 (예약 생성일)</label>
-                <input className="input-field" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
-             </div>
-             <div style={{flex:1}}>
-                <label className="input-label">숙박 월 (통계용)</label>
-                <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} style={{ border: "2px solid #0071E3" }} />
-             </div>
-          </div>
-          
-          <label className="input-label">체크인 날짜 (Arrival)</label>
-          <input className="input-field" type="date" value={arrival} onChange={(e) => setArrival(e.target.value)} required />
-
-          <div style={{display:'flex', gap:'10px'}}>
-            <div style={{flex:1}}>
-                <label className="input-label">총 박수 (Nights)</label>
-                <input className="input-field" type="number" min="1" value={nightsCount} onChange={(e) => setNightsCount(parseInt(e.target.value))} />
-            </div>
-            <div style={{flex:1}}>
-                <label className="input-label">총 금액 (Total Price)</label>
-                <input className="input-field" type="number" value={totalPrice} onChange={(e) => setTotalPrice(Number(e.target.value))} placeholder="엔화 금액" />
-            </div>
-          </div>
-
-          <label className="input-label">건물</label>
-          <select className="input-field" value={selectedBuilding} onChange={(e) => { setSelectedBuilding(e.target.value); setSelectedRoom(BUILDING_DATA[e.target.value][0]); }}>
-            {Object.keys(BUILDING_DATA).map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <label className="input-label">객실</label>
-          <select className="input-field" value={selectedRoom} onChange={(e) => setSelectedRoom(e.target.value)}>
-            {BUILDING_DATA[selectedBuilding].map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <label className="input-label">플랫폼</label>
-          <select className="input-field" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-            <option value="Direct">직접 예약 (Direct)</option>
-            <option value="Airbnb">Airbnb</option>
-            <option value="Booking">Booking.com</option>
-          </select>
-          <label className="input-label">예약 건수 (동시 등록 시)</label>
-          <input className="input-field" type="number" min="1" value={count} onChange={(e) => setCount(parseInt(e.target.value))} />
-          
-          <button className="btn-primary" type="submit">저장하기</button>
-        </form>
-      </div>
-      <div className="recent-box">
-        <div className="recent-title"><span>🕒 방금 등록한 내역</span><span style={{ fontSize: "12px", color: "#999" }}>최근 5건</span></div>
-        <div className="recent-list">
-          {recentHistory.map((item, idx) => (
-            <div key={idx} className="recent-item">
-              <div className="recent-info"><span className="recent-main">{item.room}</span><span className="recent-sub">{item.date} ({item.count}건)</span></div>
-              <span className={item.platform === "Airbnb" ? "pf-text-airbnb" : "pf-text-booking"} style={{ fontSize: "12px" }}>{item.platform}</span>
-            </div>
-          ))}
-          {recentHistory.length === 0 && <div style={{ textAlign: "center", color: "#CCC", padding: "20px" }}>아직 등록된 내역이 없습니다.</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==============================
-// ❌ AddCancellation — 취소 기록 등록 (수기)
-// ==============================
-function AddCancellation({ initialMonth }) {
-  const [bookDate, setBookDate] = useState(new Date().toISOString().slice(0, 10));
-  const [stayMonth, setStayMonth] = useState(initialMonth);
-  const [selectedBuilding, setSelectedBuilding] = useState("아라키초A");
-  const [selectedRoom, setSelectedRoom] = useState(BUILDING_DATA["아라키초A"][0]);
-  const [platform, setPlatform] = useState("Airbnb");
-  const [count, setCount] = useState(1);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!window.confirm("취소 기록을 등록하시겠습니까?")) return;
-    try {
-      const promises = [];
-      for (let i = 0; i < count; i++) {
-        promises.push(addDoc(collection(db, "reservations"), {
-          bookDate: bookDate,
-          date: bookDate,         // 취소도 date 저장
-          cancelDate: bookDate,
-          stayMonth, 
-          building: selectedBuilding, 
-          room: selectedRoom, 
-          platform, 
-          status: "cancelled", 
-          createdAt: new Date()
-        }));
-      }
-      await Promise.all(promises);
-      alert("등록 완료");
-    } catch (error) { alert("오류 발생"); }
-  };
-
-  return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
-      <div className="form-wrapper">
-        <h2 style={{ textAlign: "center", marginBottom: "30px", color: "#FF3B30" }}>취소 기록 등록</h2>
-        <form onSubmit={handleSubmit}>
-          <label className="input-label">취소 접수일</label>
-          <input className="input-field" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} />
-          <label className="input-label">취소된 예약의 숙박 월</label>
-          <input className="input-field" type="month" value={stayMonth} onChange={(e) => setStayMonth(e.target.value)} style={{ border: "2px solid #FF3B30" }} />
-          <label className="input-label">건물</label>
-          <select className="input-field" value={selectedBuilding} onChange={(e) => { setSelectedBuilding(e.target.value); setSelectedRoom(BUILDING_DATA[e.target.value][0]); }}>
-            {Object.keys(BUILDING_DATA).map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <label className="input-label">객실</label>
-          <select className="input-field" value={selectedRoom} onChange={(e) => setSelectedRoom(e.target.value)}>
-            {BUILDING_DATA[selectedBuilding].map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <label className="input-label">플랫폼</label>
-          <select className="input-field" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-            <option value="Airbnb">Airbnb</option>
-            <option value="Booking">Booking.com</option>
-            <option value="Direct">직접 예약 (Direct)</option>
-          </select>
-          <label className="input-label">취소 건수</label>
-          <input className="input-field" type="number" min="1" value={count} onChange={(e) => setCount(parseInt(e.target.value))} />
-          <button className="btn-primary btn-danger" type="submit">취소 등록</button>
-        </form>
-      </div>
     </div>
   );
 }
@@ -1772,9 +1409,6 @@ function App() {
               <Route path="/" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
-              <Route path="/list" element={<RecordList targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
-              <Route path="/add" element={<AddReservation initialMonth={globalMonth} />} />
-              <Route path="/add-cancel" element={<AddCancellation initialMonth={globalMonth} />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
               <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>

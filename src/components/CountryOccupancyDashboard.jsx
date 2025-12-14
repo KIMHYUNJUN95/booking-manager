@@ -6,6 +6,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 // 국가 코드를 한글 이름으로 매핑
 const COUNTRY_NAMES = {
   'KR': '대한민국',
+  'KO': '대한민국', // Korea 약자 (KR과 동일)
   'JP': '일본',
   'US': '미국',
   'CN': '중국',
@@ -115,9 +116,35 @@ const CountryOccupancyDashboard = () => {
       }
 
       const snapshot = await getDocs(q);
-      const reservations = snapshot.docs.map(d => d.data());
 
-      console.log(`🌍 국가별 분석: ${reservations.length}건의 confirmed 예약`);
+      // ★ 중복 제거: bookId 기준으로 유니크하게 (아라키초A, 가부키초, 다카다노바바 계정 중복 방지)
+      const uniqueMap = new Map();
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const bookId = data.bookId || data.refNum || doc.id; // bookId 우선, 없으면 refNum, 없으면 문서 ID
+
+        // 이미 있는 예약이면 건너뛰기 (중복 제거)
+        if (!uniqueMap.has(bookId)) {
+          uniqueMap.set(bookId, data);
+        }
+      });
+
+      const reservations = Array.from(uniqueMap.values());
+
+      console.log(`🌍 국가별 분석: 전체 ${snapshot.docs.length}건 → 중복 제거 후 ${reservations.length}건의 confirmed 예약`);
+
+      // 디버깅: 첫 3개 예약의 필드 확인
+      if (reservations.length > 0) {
+        console.log(`📋 예약 데이터 샘플:`, reservations.slice(0, 3).map(r => ({
+          bookId: r.bookId,
+          refNum: r.refNum,
+          guestName: r.guestName,
+          guestCountry: r.guestCountry,
+          numAdult: r.numAdult,
+          building: r.building,
+          room: r.room
+        })));
+      }
 
       // 국가별 집계
       const countryMap = {};
@@ -148,6 +175,19 @@ const CountryOccupancyDashboard = () => {
       reservations.forEach(r => {
         const size = r.numAdult || 1; // 기본값 1명
         const key = `${size}인`;
+
+        // 디버깅: 12인 이상 예약 로그
+        if (size >= 12) {
+          console.log(`⚠️ ${size}인 예약 발견:`, {
+            bookId: r.bookId,
+            guestName: r.guestName,
+            building: r.building,
+            room: r.room,
+            arrival: r.arrival,
+            departure: r.departure,
+            numAdult: r.numAdult
+          });
+        }
 
         if (!guestSizeMap[key]) {
           guestSizeMap[key] = 0;

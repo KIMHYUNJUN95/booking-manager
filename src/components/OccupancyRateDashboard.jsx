@@ -29,20 +29,23 @@ const getDaysInMonth = (year, month) => {
 };
 
 // 예약된 날짜들을 Set으로 계산 (겹침 제거)
-// ★ 중요: departure(체크아웃 날짜)는 비어있는 날로 처리 (체크아웃하면 그날은 비어있음)
+// ★ 베드24 기준: arrival ~ departure 전날까지 점유됨
+// 예: 12-05 ~ 12-07 = 12/5, 12/6 점유 (12/7은 체크아웃하는 날이므로 다음 게스트 가능)
 const getOccupiedDaysSet = (reservations, monthStart, monthEnd) => {
   const occupiedDates = new Set();
 
   reservations.forEach(r => {
+    // arrival부터 departure 전날까지
     const resStart = new Date(Math.max(new Date(r.arrival), new Date(monthStart)));
-    // ★ departure는 제외 (departure - 1일까지만 점유)
-    const resEnd = new Date(Math.min(new Date(r.departure), new Date(monthEnd)));
-    resEnd.setDate(resEnd.getDate() - 1); // 체크아웃 당일은 제외
+    const resEnd = new Date(r.departure);
+    resEnd.setDate(resEnd.getDate() - 1); // departure 전날까지만
 
-    if (resStart <= resEnd) {
-      // 예약 기간의 모든 날짜를 Set에 추가
+    // monthEnd보다 크면 monthEnd로 제한
+    const actualEnd = resEnd > new Date(monthEnd) ? new Date(monthEnd) : resEnd;
+
+    if (resStart <= actualEnd) {
       const current = new Date(resStart);
-      while (current <= resEnd) {
+      while (current <= actualEnd) {
         occupiedDates.add(current.toISOString().slice(0, 10));
         current.setDate(current.getDate() + 1);
       }
@@ -146,12 +149,14 @@ const OccupancyRateDashboard = () => {
       const occupiedDatesList = new Set();
       testRoom.forEach(r => {
         const resStart = new Date(Math.max(new Date(r.arrival), new Date(`${selectedMonth}-01`)));
-        const resEnd = new Date(Math.min(new Date(r.departure), new Date(selMonthEnd)));
-        resEnd.setDate(resEnd.getDate() - 1); // 체크아웃 당일 제외
+        const resEnd = new Date(r.departure);
+        resEnd.setDate(resEnd.getDate() - 1); // departure 전날까지만
 
-        if (resStart <= resEnd) {
+        const actualEnd = resEnd > new Date(selMonthEnd) ? new Date(selMonthEnd) : resEnd;
+
+        if (resStart <= actualEnd) {
           const current = new Date(resStart);
-          while (current <= resEnd) {
+          while (current <= actualEnd) {
             occupiedDatesList.add(current.getDate());
             current.setDate(current.getDate() + 1);
           }

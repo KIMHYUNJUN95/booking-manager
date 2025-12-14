@@ -145,12 +145,6 @@ const RevenueDashboard = () => {
       const snapshot = await getDocs(q);
       const allDocs = snapshot.docs.map(d => d.data());
 
-      // 날짜가 범위 내인지 확인하는 함수
-      const isInRange = (dateStr, start, end) => {
-        if (!dateStr) return false;
-        return dateStr >= start && dateStr <= end;
-      };
-
       // 월별 데이터 초기화
       const monthLabels = getMonthLabels();
       const monthlyMap = {};
@@ -177,45 +171,120 @@ const RevenueDashboard = () => {
       const currentPeriodInfo = getPeriodInfo(selectedPeriod);
       const comparePeriodInfo = getPeriodInfo(comparePeriod);
 
-      // ★ totalPrice 기준으로 매출 집계 (입실/퇴실 대시보드와 동일한 금액)
-      // arrival(체크인일) 기준으로 해당 기수/기간에 포함되는지 판단
+      // ★ 1박당 기준 매출 집계 (베드24와 동일한 방식)
+      // 각 예약의 총 박수를 계산하고, 해당 기간/월에 숙박한 박수만큼만 매출 분배
       allDocs.forEach(doc => {
-        if (!doc.arrival) return;
+        if (!doc.arrival || !doc.departure) return;
 
         // totalPrice 사용 (Beds24 invoiceItems 합계 = 실제 예약 금액)
-        const price = Number(doc.totalPrice || doc.price) || 0;
+        const totalPrice = Number(doc.totalPrice || doc.price) || 0;
         const bName = doc.building || "Unknown";
         const rName = doc.room || "Unknown";
-        const arrivalMonth = doc.arrival.slice(5, 7); // "01" ~ "12"
 
-        // 현재 기수/커스텀 범위 체크
-        if (isInRange(doc.arrival, currentRange.startDate, currentRange.endDate)) {
-          const monthKey = useCustomDate ? doc.arrival.slice(0, 7) : arrivalMonth;
-          if (monthlyMap[monthKey]) {
-            monthlyMap[monthKey].current += price;
+        // 총 박수 계산 (arrival ~ departure 전날까지)
+        const arrivalDate = new Date(doc.arrival);
+        const departureDate = new Date(doc.departure);
+        const totalNights = Math.ceil((departureDate - arrivalDate) / (1000 * 60 * 60 * 24));
+
+        if (totalNights <= 0) return; // 잘못된 데이터 제외
+
+        // 1박당 금액 계산
+        const pricePerNight = totalPrice / totalNights;
+
+        // 현재 기수/커스텀 범위 처리
+        const currentStart = new Date(currentRange.startDate);
+        const currentEnd = new Date(currentRange.endDate);
+
+        // 예약 기간이 현재 범위와 겹치는지 확인
+        if (departureDate > currentStart && arrivalDate <= currentEnd) {
+          // 겹치는 구간의 시작일과 종료일
+          const overlapStart = new Date(Math.max(arrivalDate, currentStart));
+          const overlapEnd = new Date(Math.min(departureDate, currentEnd));
+          overlapEnd.setDate(overlapEnd.getDate()); // departure는 체크아웃 날이므로 전날까지만
+
+          // 겹치는 박수 계산
+          const overlapNights = Math.ceil((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24));
+
+          if (overlapNights > 0) {
+            const overlapRevenue = pricePerNight * overlapNights;
+
+            // 월별 분배 (현재 기수 내에서)
+            const current = new Date(overlapStart);
+            while (current < overlapEnd) {
+              const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+              const periodEnd = new Date(Math.min(overlapEnd, monthEnd));
+              periodEnd.setDate(periodEnd.getDate());
+
+              const monthNights = Math.ceil((periodEnd - current) / (1000 * 60 * 60 * 24));
+              if (monthNights > 0) {
+                const monthRevenue = pricePerNight * monthNights;
+
+                const monthKey = useCustomDate
+                  ? `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+                  : String(current.getMonth() + 1).padStart(2, '0');
+
+                if (monthlyMap[monthKey]) {
+                  monthlyMap[monthKey].current += monthRevenue;
+                }
+              }
+
+              current.setMonth(current.getMonth() + 1);
+              current.setDate(1);
+            }
+
+            calcCurrentTotal += overlapRevenue;
+            bMapCurrent[bName] = (bMapCurrent[bName] || 0) + overlapRevenue;
+            if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
+            rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + overlapRevenue;
           }
-          calcCurrentTotal += price;
-
-          bMapCurrent[bName] = (bMapCurrent[bName] || 0) + price;
-          if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
-          rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + price;
         }
 
-        // 비교 기수/범위 체크
-        if (isInRange(doc.arrival, compareRange.startDate, compareRange.endDate)) {
-          const monthKey = useCustomDate
-            ? `${parseInt(doc.arrival.slice(0, 4)) + 1}-${arrivalMonth}`
-            : arrivalMonth;
-          if (monthlyMap[monthKey]) {
-            monthlyMap[monthKey].compare += price;
-          } else if (monthlyMap[arrivalMonth]) {
-            monthlyMap[arrivalMonth].compare += price;
-          }
-          calcCompareTotal += price;
+        // 비교 기수/범위 처리
+        const compareStart = new Date(compareRange.startDate);
+        const compareEnd = new Date(compareRange.endDate);
 
-          bMapCompare[bName] = (bMapCompare[bName] || 0) + price;
-          if (!rMapCompare[bName]) rMapCompare[bName] = {};
-          rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + price;
+        if (departureDate > compareStart && arrivalDate <= compareEnd) {
+          const overlapStart = new Date(Math.max(arrivalDate, compareStart));
+          const overlapEnd = new Date(Math.min(departureDate, compareEnd));
+          overlapEnd.setDate(overlapEnd.getDate());
+
+          const overlapNights = Math.ceil((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24));
+
+          if (overlapNights > 0) {
+            const overlapRevenue = pricePerNight * overlapNights;
+
+            // 월별 분배 (비교 기수 내에서)
+            const current = new Date(overlapStart);
+            while (current < overlapEnd) {
+              const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+              const periodEnd = new Date(Math.min(overlapEnd, monthEnd));
+              periodEnd.setDate(periodEnd.getDate());
+
+              const monthNights = Math.ceil((periodEnd - current) / (1000 * 60 * 60 * 24));
+              if (monthNights > 0) {
+                const monthRevenue = pricePerNight * monthNights;
+
+                let monthKey;
+                if (useCustomDate) {
+                  monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+                } else {
+                  monthKey = String(current.getMonth() + 1).padStart(2, '0');
+                }
+
+                if (monthlyMap[monthKey]) {
+                  monthlyMap[monthKey].compare += monthRevenue;
+                }
+              }
+
+              current.setMonth(current.getMonth() + 1);
+              current.setDate(1);
+            }
+
+            calcCompareTotal += overlapRevenue;
+            bMapCompare[bName] = (bMapCompare[bName] || 0) + overlapRevenue;
+            if (!rMapCompare[bName]) rMapCompare[bName] = {};
+            rMapCompare[bName][rName] = (rMapCompare[bName][rName] || 0) + overlapRevenue;
+          }
         }
       });
 

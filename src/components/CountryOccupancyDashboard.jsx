@@ -5,10 +5,13 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 
 // 국가 코드를 한글 이름으로 매핑
 const COUNTRY_NAMES = {
+  // 한국
   'KR': '대한민국',
   'KO': '대한민국', // Korea 약자 (KR과 동일)
+
+  // 아시아
   'JP': '일본',
-  'US': '미국',
+  'JAPAN': '일본',
   'CN': '중국',
   'TW': '대만',
   'HK': '홍콩',
@@ -19,27 +22,28 @@ const COUNTRY_NAMES = {
   'PH': '필리핀',
   'ID': '인도네시아',
   'IN': '인도',
+  'BD': '방글라데시',
+  'PK': '파키스탄',
+  'NP': '네팔',
+  'LK': '스리랑카',
+  'MM': '미얀마',
+  'KH': '캄보디아',
+  'LA': '라오스',
+  'MN': '몽골',
+  'KZ': '카자흐스탄',
+  'UZ': '우즈베키스탄',
+  'MO': '마카오',
+
+  // 오세아니아
   'AU': '호주',
   'NZ': '뉴질랜드',
+
+  // 유럽
   'GB': '영국',
   'FR': '프랑스',
   'DE': '독일',
   'IT': '이탈리아',
   'ES': '스페인',
-  'CA': '캐나다',
-  'BR': '브라질',
-  'MX': '멕시코',
-  'RU': '러시아',
-  'SA': '사우디아라비아',
-  'AE': '아랍에미리트',
-  'EG': '이집트',
-  'ZA': '남아프리카공화국',
-  'NG': '나이지리아',
-  'KE': '케냐',
-  'AR': '아르헨티나',
-  'CL': '칠레',
-  'CO': '콜롬비아',
-  'PE': '페루',
   'NL': '네덜란드',
   'BE': '벨기에',
   'CH': '스위스',
@@ -54,17 +58,42 @@ const COUNTRY_NAMES = {
   'PT': '포르투갈',
   'IE': '아일랜드',
   'TR': '터키',
+  'RU': '러시아',
+  'BZ': '벨리즈',
+  'CR': '코스타리카',
+  'HE': '헬레나 섬',
+  'SW': '스웨덴', // Sweden 약자
+  'DA': '덴마크', // Denmark 약자
+  'NC': '뉴칼레도니아',
+  'SK': '슬로바키아',
+
+  // 북미/남미
+  'US': '미국',
+  'CA': '캐나다',
+  'BR': '브라질',
+  'MX': '멕시코',
+  'AR': '아르헨티나',
+  'CL': '칠레',
+  'CO': '콜롬비아',
+  'PE': '페루',
+
+  // 중동
+  'SA': '사우디아라비아',
+  'AE': '아랍에미리트',
   'IL': '이스라엘',
-  'BD': '방글라데시',
-  'PK': '파키스탄',
-  'NP': '네팔',
-  'LK': '스리랑카',
-  'MM': '미얀마',
-  'KH': '캄보디아',
-  'LA': '라오스',
-  'MN': '몽골',
-  'KZ': '카자흐스탄',
-  'UZ': '우즈베키스탄',
+  'KW': '쿠웨이트',
+
+  // 아프리카
+  'EG': '이집트',
+  'ZA': '남아프리카공화국',
+  'NG': '나이지리아',
+  'KE': '케냐',
+
+  // 기타
+  '19': '미분류',
+  'UNDEFINED': '미상',
+  'NULL': '미상',
+  '': '미상',
 };
 
 // 파이 차트 색상
@@ -148,15 +177,35 @@ const CountryOccupancyDashboard = () => {
 
       // 국가별 집계
       const countryMap = {};
+      const unknownSamples = []; // 미상 데이터 샘플 수집
+
       reservations.forEach(r => {
-        const countryCode = (r.guestCountry || 'UNKNOWN').toUpperCase(); // 대문자로 변환
+        const rawCountry = r.guestCountry || 'UNKNOWN';
+        const countryCode = String(rawCountry).toUpperCase().trim(); // 대문자로 변환 및 공백 제거
         const countryName = COUNTRY_NAMES[countryCode] || (countryCode === 'UNKNOWN' ? '미상' : countryCode);
+
+        // 미상 데이터 샘플 수집 (처음 10개)
+        if (countryName === '미상' && unknownSamples.length < 10) {
+          unknownSamples.push({
+            bookId: r.bookId,
+            guestName: r.guestName,
+            guestCountry: r.guestCountry,
+            rawValue: rawCountry,
+            building: r.building,
+            room: r.room
+          });
+        }
 
         if (!countryMap[countryName]) {
           countryMap[countryName] = 0;
         }
         countryMap[countryName]++;
       });
+
+      // 미상 데이터가 있으면 로그 출력
+      if (unknownSamples.length > 0) {
+        console.log(`⚠️ '미상' 국가 데이터 샘플 (${unknownSamples.length}개):`, unknownSamples);
+      }
 
       // 국가별 데이터 정렬 (예약 건수 내림차순)
       const countryArray = Object.entries(countryMap)

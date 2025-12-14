@@ -122,7 +122,7 @@ const CountryOccupancyDashboard = () => {
       // 국가별 집계
       const countryMap = {};
       reservations.forEach(r => {
-        const countryCode = r.guestCountry || 'UNKNOWN';
+        const countryCode = (r.guestCountry || 'UNKNOWN').toUpperCase(); // 대문자로 변환
         const countryName = COUNTRY_NAMES[countryCode] || (countryCode === 'UNKNOWN' ? '미상' : countryCode);
 
         if (!countryMap[countryName]) {

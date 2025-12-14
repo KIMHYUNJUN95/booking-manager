@@ -145,6 +145,8 @@ const RevenueDashboard = () => {
       const snapshot = await getDocs(q);
       const allDocs = snapshot.docs.map(d => d.data());
 
+      console.log(`💰 매출 계산 시작: ${allDocs.length}건의 confirmed 예약 데이터`);
+
       // 월별 데이터 초기화
       const monthLabels = getMonthLabels();
       const monthlyMap = {};
@@ -197,39 +199,39 @@ const RevenueDashboard = () => {
 
         // 예약 기간이 현재 범위와 겹치는지 확인
         if (departureDate > currentStart && arrivalDate <= currentEnd) {
-          // 겹치는 구간의 시작일과 종료일
+          // 겹치는 구간의 시작일과 종료일 (departure는 체크아웃 날이므로 -1일)
           const overlapStart = new Date(Math.max(arrivalDate, currentStart));
-          const overlapEnd = new Date(Math.min(departureDate, currentEnd));
-          overlapEnd.setDate(overlapEnd.getDate()); // departure는 체크아웃 날이므로 전날까지만
+          const overlapEndDate = new Date(departureDate);
+          overlapEndDate.setDate(overlapEndDate.getDate() - 1); // departure 전날까지
+          const overlapEnd = new Date(Math.min(overlapEndDate, currentEnd));
 
-          // 겹치는 박수 계산
-          const overlapNights = Math.ceil((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24));
-
-          if (overlapNights > 0) {
+          if (overlapStart <= overlapEnd) {
+            // 겹치는 박수 계산 (시작일부터 종료일까지 포함)
+            const overlapNights = Math.floor((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24)) + 1;
             const overlapRevenue = pricePerNight * overlapNights;
 
             // 월별 분배 (현재 기수 내에서)
-            const current = new Date(overlapStart);
-            while (current < overlapEnd) {
+            let current = new Date(overlapStart);
+            while (current <= overlapEnd) {
+              // 이번 달의 마지막 날
               const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-              const periodEnd = new Date(Math.min(overlapEnd, monthEnd));
-              periodEnd.setDate(periodEnd.getDate());
+              // 이번 달에 포함되는 마지막 날 (overlapEnd와 monthEnd 중 작은 값)
+              const periodEnd = overlapEnd < monthEnd ? overlapEnd : monthEnd;
 
-              const monthNights = Math.ceil((periodEnd - current) / (1000 * 60 * 60 * 24));
-              if (monthNights > 0) {
-                const monthRevenue = pricePerNight * monthNights;
+              // 이번 달의 박수 계산
+              const monthNights = Math.floor((periodEnd - current) / (1000 * 60 * 60 * 24)) + 1;
+              const monthRevenue = pricePerNight * monthNights;
 
-                const monthKey = useCustomDate
-                  ? `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
-                  : String(current.getMonth() + 1).padStart(2, '0');
+              const monthKey = useCustomDate
+                ? `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+                : String(current.getMonth() + 1).padStart(2, '0');
 
-                if (monthlyMap[monthKey]) {
-                  monthlyMap[monthKey].current += monthRevenue;
-                }
+              if (monthlyMap[monthKey]) {
+                monthlyMap[monthKey].current += monthRevenue;
               }
 
-              current.setMonth(current.getMonth() + 1);
-              current.setDate(1);
+              // 다음 달 1일로 이동
+              current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
             }
 
             calcCurrentTotal += overlapRevenue;
@@ -245,39 +247,36 @@ const RevenueDashboard = () => {
 
         if (departureDate > compareStart && arrivalDate <= compareEnd) {
           const overlapStart = new Date(Math.max(arrivalDate, compareStart));
-          const overlapEnd = new Date(Math.min(departureDate, compareEnd));
-          overlapEnd.setDate(overlapEnd.getDate());
+          const overlapEndDate = new Date(departureDate);
+          overlapEndDate.setDate(overlapEndDate.getDate() - 1); // departure 전날까지
+          const overlapEnd = new Date(Math.min(overlapEndDate, compareEnd));
 
-          const overlapNights = Math.ceil((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24));
-
-          if (overlapNights > 0) {
+          if (overlapStart <= overlapEnd) {
+            const overlapNights = Math.floor((overlapEnd - overlapStart) / (1000 * 60 * 60 * 24)) + 1;
             const overlapRevenue = pricePerNight * overlapNights;
 
             // 월별 분배 (비교 기수 내에서)
-            const current = new Date(overlapStart);
-            while (current < overlapEnd) {
+            let current = new Date(overlapStart);
+            while (current <= overlapEnd) {
               const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-              const periodEnd = new Date(Math.min(overlapEnd, monthEnd));
-              periodEnd.setDate(periodEnd.getDate());
+              const periodEnd = overlapEnd < monthEnd ? overlapEnd : monthEnd;
 
-              const monthNights = Math.ceil((periodEnd - current) / (1000 * 60 * 60 * 24));
-              if (monthNights > 0) {
-                const monthRevenue = pricePerNight * monthNights;
+              const monthNights = Math.floor((periodEnd - current) / (1000 * 60 * 60 * 24)) + 1;
+              const monthRevenue = pricePerNight * monthNights;
 
-                let monthKey;
-                if (useCustomDate) {
-                  monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
-                } else {
-                  monthKey = String(current.getMonth() + 1).padStart(2, '0');
-                }
-
-                if (monthlyMap[monthKey]) {
-                  monthlyMap[monthKey].compare += monthRevenue;
-                }
+              let monthKey;
+              if (useCustomDate) {
+                monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+              } else {
+                monthKey = String(current.getMonth() + 1).padStart(2, '0');
               }
 
-              current.setMonth(current.getMonth() + 1);
-              current.setDate(1);
+              if (monthlyMap[monthKey]) {
+                monthlyMap[monthKey].compare += monthRevenue;
+              }
+
+              // 다음 달 1일로 이동
+              current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
             }
 
             calcCompareTotal += overlapRevenue;
@@ -288,8 +287,11 @@ const RevenueDashboard = () => {
         }
       });
 
-      // 차트용 배열 변환
-      const chartData = Object.entries(monthlyMap).map(([key, val]) => val);
+      // 차트용 배열 변환 (월 순서 보장)
+      const chartData = monthLabels.map(m => monthlyMap[m.key] || { month: m.label, current: 0, compare: 0 });
+
+      console.log(`📊 월별 매출 데이터:`, chartData);
+      console.log(`💵 총 매출 - 현재: ¥${calcCurrentTotal.toLocaleString()}, 비교: ¥${calcCompareTotal.toLocaleString()}`);
 
       // 건물별 데이터 (정렬)
       const buildingChartData = BUILDING_ORDER

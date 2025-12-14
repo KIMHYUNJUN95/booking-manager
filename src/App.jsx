@@ -9,6 +9,7 @@ import { db, auth } from './firebase';
 import RevenueDashboard from './RevenueDashboard.jsx';
 import CleaningDashboard from './components/CleaningDashboard.jsx';
 import OccupancyRateDashboard from './components/OccupancyRateDashboard.jsx';
+import TodaySummaryDashboard from './components/TodaySummaryDashboard.jsx';
 
 // ★★★ 서버 주소 ★★★
 const GET_ARRIVALS_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/getTodayArrivals";
@@ -402,7 +403,8 @@ function Sidebar({ onSync }) {
   const currentPath = location.pathname;
 
   const menu = [
-    { path: "/", label: "예약 접수 대시보드", icon: "📊" },
+    { path: "/", label: "오늘의 요약", icon: "📅" },
+    { path: "/performance", label: "예약 접수 대시보드", icon: "📊" },
     { path: "/revenue", label: "매출 대시보드", icon: "💰" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
     { path: "/occupancy-rate", label: "객실 가동률", icon: "📈" },
@@ -1411,7 +1413,8 @@ function App() {
           <Sidebar onSync={handleSync} />
           <main className="main-content">
             <Routes>
-              <Route path="/" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
+              <Route path="/" element={<TodaySummaryDashboard />} />
+              <Route path="/performance" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/occupancy-rate" element={<OccupancyRateDashboard />} />

@@ -111,10 +111,14 @@ const moreStyles = `
   .btn-delete { background: #FFE5E5; color: #FF3B30; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; }
 
   /* ========================================== */
-  /* 모바일 반응형 CSS (768px 이하) */
+  /* 모바일 반응형 CSS (768px 이하) - 대기업 수준 UI/UX */
   /* ========================================== */
   @media (max-width: 768px) {
-    body { overflow: auto; height: auto; }
+    body {
+      overflow: auto;
+      height: auto;
+      background-color: #F2F2F7;
+    }
 
     /* 레이아웃 변경 */
     .dashboard-layout {
@@ -123,7 +127,7 @@ const moreStyles = `
       min-height: 100vh;
     }
 
-    /* 사이드바 -> 하단 고정 네비게이션 */
+    /* 사이드바 -> 하단 고정 네비게이션 (iOS 스타일) */
     .sidebar {
       width: 100%;
       position: fixed;
@@ -131,20 +135,22 @@ const moreStyles = `
       left: 0;
       right: 0;
       top: auto !important;
-      height: 70px !important;
-      min-height: 70px !important;
-      max-height: 70px !important;
-      padding: 8px 0 12px 0;
+      height: 82px !important;
+      min-height: 82px !important;
+      max-height: 82px !important;
+      padding: 0 !important;
+      padding-bottom: env(safe-area-inset-bottom) !important;
       border-right: none;
-      border-top: 1px solid rgba(0,0,0,0.1);
-      background: rgba(255,255,255,0.98);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      border-top: 0.5px solid rgba(60,60,67,0.12);
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
       z-index: 1000;
       display: flex;
       flex-direction: row !important;
       justify-content: center !important;
-      align-items: center !important;
+      align-items: stretch !important;
+      box-shadow: 0 -1px 0 0 rgba(0,0,0,0.05);
     }
 
     .logo-area { display: none !important; }
@@ -154,15 +160,16 @@ const moreStyles = `
     .nav-menu {
       display: flex !important;
       flex-direction: row !important;
-      justify-content: space-around !important;
-      align-items: center !important;
+      justify-content: space-evenly !important;
+      align-items: stretch !important;
       width: 100%;
+      max-width: 500px;
       gap: 0;
       padding: 0;
-      margin: 0;
+      margin: 0 auto;
     }
 
-    /* 모바일에서 주요 메뉴 5개만 표시 (예약접수, 매출, 가동률, 입퇴실, 청소) */
+    /* 모바일 하단 탭바 아이템 (iOS 스타일) */
     .nav-item {
       display: none !important;
     }
@@ -171,132 +178,300 @@ const moreStyles = `
     .nav-item:nth-child(2),
     .nav-item:nth-child(4),
     .nav-item:nth-child(5),
-    .nav-item:nth-child(6) {
+    .nav-item:nth-child(8) {
       display: flex !important;
       flex-direction: column !important;
       align-items: center !important;
       justify-content: center !important;
-      padding: 4px 8px !important;
-      font-size: 9px !important;
-      gap: 2px !important;
-      min-width: auto !important;
-      width: 20% !important;
+      padding: 0 !important;
+      padding-top: 4px !important;
+      font-size: 10px !important;
+      font-weight: 500 !important;
+      gap: 4px !important;
+      min-width: 0 !important;
+      flex: 1 !important;
       text-align: center !important;
-      border-radius: 8px !important;
+      border-radius: 0 !important;
       background: transparent !important;
       box-shadow: none !important;
+      color: #8E8E93 !important;
+      transition: all 0.2s ease !important;
+      letter-spacing: -0.2px !important;
     }
 
     .nav-item.active:nth-child(1),
     .nav-item.active:nth-child(2),
     .nav-item.active:nth-child(4),
     .nav-item.active:nth-child(5),
-    .nav-item.active:nth-child(6) {
-      background: rgba(0,113,227,0.1) !important;
-      color: #0071E3 !important;
+    .nav-item.active:nth-child(8) {
+      background: transparent !important;
+      color: #007AFF !important;
       box-shadow: none !important;
+      font-weight: 600 !important;
+    }
+
+    .nav-item.active-purple {
+      color: #5856D6 !important;
+    }
+
+    .nav-item.active-red {
+      color: #FF3B30 !important;
     }
 
     .nav-item span:first-child {
-      font-size: 22px !important;
+      font-size: 24px !important;
       line-height: 1 !important;
+      margin-bottom: 2px !important;
+      filter: none !important;
     }
 
-    /* 메인 콘텐츠 */
+    /* 메인 콘텐츠 (상단 여백 추가, 하단 탭바 공간 확보) */
     .main-content {
-      padding: 16px;
-      padding-bottom: 90px !important;
+      padding: 12px !important;
+      padding-top: 16px !important;
+      padding-bottom: 100px !important;
       width: 100%;
       margin-left: 0 !important;
+      background: #F2F2F7 !important;
     }
 
     .dashboard-header {
       flex-direction: column;
       align-items: flex-start;
       gap: 12px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
+      background: white;
+      padding: 16px;
+      margin-left: -12px;
+      margin-right: -12px;
+      margin-top: -16px;
+      border-bottom: 0.5px solid rgba(60,60,67,0.12);
     }
 
-    .page-title { font-size: 20px; }
+    .page-title {
+      font-size: 28px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.5px;
+    }
 
-    /* KPI 그리드 */
+    /* KPI 그리드 (2열 레이아웃, 카드 간격 개선) */
     .kpi-grid {
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .kpi-card { padding: 14px; }
-    .kpi-value { font-size: 22px; }
-    .kpi-label { font-size: 12px; }
-
-    /* 차트 */
-    .charts-grid { grid-template-columns: 1fr; gap: 16px; }
-    .chart-card { padding: 12px; margin-bottom: 16px; }
-    .chart-title { font-size: 14px; margin-bottom: 12px; }
-
-    /* 테이블 */
-    .table-card {
-      padding: 10px;
+      gap: 12px;
       margin-bottom: 16px;
-      border-radius: 12px;
     }
 
-    .table-full th, .table-full td {
-      padding: 8px 4px;
-      font-size: 11px;
+    .kpi-card {
+      padding: 16px !important;
+      border-radius: 16px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+      border: 0.5px solid rgba(0,0,0,0.04);
     }
 
-    .table-full { min-width: 500px; }
+    .kpi-value {
+      font-size: 28px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.5px;
+    }
 
-    /* 모달 */
+    .kpi-label {
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      color: #8E8E93 !important;
+    }
+
+    .kpi-sub {
+      font-size: 12px !important;
+      color: #8E8E93 !important;
+    }
+
+    /* 차트 카드 (단일 열 레이아웃, 높이 증가) */
+    .charts-grid {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .chart-card {
+      padding: 16px !important;
+      margin-bottom: 12px !important;
+      border-radius: 16px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+      border: 0.5px solid rgba(0,0,0,0.04);
+    }
+
+    .chart-title {
+      font-size: 17px !important;
+      font-weight: 600 !important;
+      margin-bottom: 16px !important;
+      color: #1D1D1F !important;
+      letter-spacing: -0.3px;
+    }
+
+    /* Recharts 차트 크기 조정 */
+    .recharts-wrapper {
+      min-height: 280px !important;
+    }
+
+    .recharts-surface {
+      overflow: visible !important;
+    }
+
+    /* 차트 텍스트 가독성 향상 */
+    .recharts-text {
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      fill: #1D1D1F !important;
+    }
+
+    .recharts-label {
+      font-size: 11px !important;
+      font-weight: 600 !important;
+    }
+
+    /* 테이블 카드 */
+    .table-card {
+      padding: 16px !important;
+      margin-bottom: 12px !important;
+      border-radius: 16px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+      border: 0.5px solid rgba(0,0,0,0.04);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .table-full th {
+      padding: 10px 8px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      color: #8E8E93 !important;
+      background: #F2F2F7 !important;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .table-full td {
+      padding: 12px 8px !important;
+      font-size: 14px !important;
+      color: #1D1D1F !important;
+      border-bottom: 0.5px solid rgba(60,60,67,0.12) !important;
+    }
+
+    .table-full {
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+
+    .text-left {
+      text-align: left !important;
+    }
+
+    .text-right {
+      text-align: right !important;
+    }
+
+    /* 모달 (iOS 스타일) */
     .modal-content {
-      margin: 16px;
-      max-width: calc(100vw - 32px);
-      max-height: 85vh;
+      margin: 20px;
+      max-width: calc(100vw - 40px);
+      max-height: 80vh;
       overflow-y: auto;
-      padding: 16px;
+      padding: 20px;
+      border-radius: 20px !important;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
     }
 
-    .modal-title { font-size: 18px; }
+    .modal-title {
+      font-size: 20px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.3px;
+    }
 
     /* 로그인 */
     .login-card {
       margin: 20px;
-      padding: 24px;
+      padding: 32px 24px;
       max-width: calc(100vw - 40px);
+      border-radius: 20px !important;
+    }
+
+    .login-title {
+      font-size: 28px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.5px;
     }
 
     /* 폼 */
     .form-wrapper {
-      padding: 20px;
+      padding: 24px;
       max-width: 100%;
+      border-radius: 20px !important;
     }
 
     .form-input, .form-select, .input-field {
-      padding: 10px;
-      font-size: 14px;
+      padding: 12px 16px !important;
+      font-size: 16px !important;
+      border-radius: 12px !important;
+      border: 0.5px solid rgba(60,60,67,0.29) !important;
+      background: #FFFFFF !important;
+    }
+
+    .form-input:focus, .form-select:focus, .input-field:focus {
+      border-color: #007AFF !important;
+      box-shadow: 0 0 0 4px rgba(0,122,255,0.1) !important;
+    }
+
+    .form-button, .btn-primary {
+      padding: 16px !important;
+      font-size: 17px !important;
+      font-weight: 600 !important;
+      border-radius: 12px !important;
+      letter-spacing: -0.3px;
     }
 
     /* 스위치 버튼 */
     .switch-container {
       width: 100%;
       justify-content: center;
+      padding: 3px;
+      background: #E5E5EA;
+      border-radius: 10px;
     }
 
     .switch-btn {
-      padding: 8px 12px;
-      font-size: 12px;
+      padding: 10px 16px !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      border-radius: 8px !important;
     }
 
     /* Recent Box 숨김 */
-    .recent-box { display: none; }
+    .recent-box { display: none !important; }
 
     /* 건물 섹션 */
-    .building-section { margin-bottom: 20px; }
-    .building-title { font-size: 14px !important; }
+    .building-section {
+      margin-bottom: 16px !important;
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      border: 0.5px solid rgba(0,0,0,0.04);
+    }
+
+    .building-title {
+      font-size: 17px !important;
+      font-weight: 600 !important;
+      letter-spacing: -0.3px;
+    }
 
     /* 태그 */
-    .tag-good, .tag-pending, .tag-cancel { font-size: 10px; padding: 3px 6px; }
+    .tag-good, .tag-pending, .tag-cancel, .tag-success {
+      font-size: 11px !important;
+      padding: 4px 8px !important;
+      font-weight: 600 !important;
+      border-radius: 6px !important;
+    }
   }
 
   /* 아주 작은 화면 (480px 이하) */

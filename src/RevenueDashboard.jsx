@@ -87,9 +87,11 @@ const RevenueDashboard = () => {
     }
 
     const period = getPeriodInfo(periodNum);
+    // 해당 월의 마지막 날을 정확히 계산
+    const lastDay = new Date(period.endYear, period.endMonth, 0).getDate();
     return {
       startDate: `${period.startYear}-${String(period.startMonth).padStart(2, '0')}-01`,
-      endDate: `${period.endYear}-${String(period.endMonth).padStart(2, '0')}-${period.endMonth === 6 ? '30' : '31'}`
+      endDate: `${period.endYear}-${String(period.endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     };
   };
 
@@ -175,6 +177,10 @@ const RevenueDashboard = () => {
 
       // ★ 1박당 기준 매출 집계 (베드24와 동일한 방식)
       // 각 예약의 총 박수를 계산하고, 해당 기간/월에 숙박한 박수만큼만 매출 분배
+
+      // 디버깅: 특정 예약 추적용 (아라키초A 201호의 12월 예약)
+      let debugCount = 0;
+
       allDocs.forEach(doc => {
         if (!doc.arrival || !doc.departure) return;
 
@@ -186,12 +192,23 @@ const RevenueDashboard = () => {
         // 총 박수 계산 (arrival ~ departure 전날까지)
         const arrivalDate = new Date(doc.arrival);
         const departureDate = new Date(doc.departure);
-        const totalNights = Math.ceil((departureDate - arrivalDate) / (1000 * 60 * 60 * 24));
+        const totalNights = Math.floor((departureDate - arrivalDate) / (1000 * 60 * 60 * 24));
 
         if (totalNights <= 0) return; // 잘못된 데이터 제외
 
         // 1박당 금액 계산
         const pricePerNight = totalPrice / totalNights;
+
+        // 디버깅: 아라키초A 201호의 현재 기수 예약만 로그 (처음 5개만)
+        const isDebugTarget = bName === "아라키초A" && rName === "201호" &&
+                             doc.arrival >= currentRange.startDate &&
+                             doc.arrival <= currentRange.endDate;
+        if (isDebugTarget && debugCount < 5) {
+          console.log(`🔍 [예약 ${debugCount + 1}] ${bName} ${rName}: ${doc.arrival} ~ ${doc.departure}`);
+          console.log(`   총금액: ¥${totalPrice.toLocaleString()}, 총박수: ${totalNights}박, 1박당: ¥${Math.round(pricePerNight).toLocaleString()}`);
+          console.log(`   게스트: ${doc.guestName || '이름없음'}, 예약접수: ${doc.bookDate || '알수없음'}`);
+          debugCount++;
+        }
 
         // 현재 기수/커스텀 범위 처리
         const currentStart = new Date(currentRange.startDate);
@@ -228,6 +245,11 @@ const RevenueDashboard = () => {
 
               if (monthlyMap[monthKey]) {
                 monthlyMap[monthKey].current += monthRevenue;
+              }
+
+              // 디버깅: 월별 분배 로그
+              if (isDebugTarget && debugCount <= 5) {
+                console.log(`   → ${current.getMonth() + 1}월: ${monthNights}박 × ¥${Math.round(pricePerNight).toLocaleString()} = ¥${Math.round(monthRevenue).toLocaleString()}`);
               }
 
               // 다음 달 1일로 이동

@@ -11,6 +11,11 @@ import CleaningDashboard from './components/CleaningDashboard.jsx';
 import OccupancyRateDashboard from './components/OccupancyRateDashboard.jsx';
 import TodaySummaryDashboard from './components/TodaySummaryDashboard.jsx';
 import CountryOccupancyDashboard from './components/CountryOccupancyDashboard.jsx';
+import CalendarDashboard from './components/CalendarDashboard.jsx';
+import RoomPricingDashboard from './components/RoomPricingDashboard.jsx';
+import AiListingPage from './components/AiListingPage'; 
+import AiManager from './components/AiListingPage';
+import AiChatbot from './components/AiChatbot';
 
 // ★★★ 서버 주소 ★★★
 const GET_ARRIVALS_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/getTodayArrivals";
@@ -20,6 +25,18 @@ const SYNC_BEDS24_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions
 const styles = `
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
   body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Helvetica Neue", sans-serif; background-color: #F5F5F7; height: 100vh; overflow: hidden; }
+
+  /* 애니메이션 */
+  @keyframes slideUp {
+    from {
+      transform: translate(-50%, 20px);
+      opacity: 0;
+    }
+    to {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+  }
 
   /* 로그인 */
   .login-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background: #F5F5F7; z-index: 9999; }
@@ -175,10 +192,10 @@ const moreStyles = `
     }
 
     .nav-item:nth-child(1),
-    .nav-item:nth-child(2),
+    .nav-item:nth-child(3),
     .nav-item:nth-child(4),
-    .nav-item:nth-child(5),
-    .nav-item:nth-child(8) {
+    .nav-item:nth-child(8),
+    .nav-item:nth-child(9) {
       display: flex !important;
       flex-direction: column !important;
       align-items: center !important;
@@ -200,10 +217,10 @@ const moreStyles = `
     }
 
     .nav-item.active:nth-child(1),
-    .nav-item.active:nth-child(2),
+    .nav-item.active:nth-child(3),
     .nav-item.active:nth-child(4),
-    .nav-item.active:nth-child(5),
-    .nav-item.active:nth-child(8) {
+    .nav-item.active:nth-child(8),
+    .nav-item.active:nth-child(9) {
       background: transparent !important;
       color: #007AFF !important;
       box-shadow: none !important;
@@ -480,10 +497,10 @@ const moreStyles = `
 
     .nav-item span:first-child { font-size: 20px !important; }
     .nav-item:nth-child(1),
-    .nav-item:nth-child(2),
+    .nav-item:nth-child(3),
     .nav-item:nth-child(4),
-    .nav-item:nth-child(5),
-    .nav-item:nth-child(6) {
+    .nav-item:nth-child(8),
+    .nav-item:nth-child(9) {
       font-size: 8px !important;
     }
 
@@ -582,11 +599,15 @@ function Sidebar({ onSync }) {
     { path: "/", label: "오늘의 요약", icon: "📅" },
     { path: "/performance", label: "예약 접수 대시보드", icon: "📊" },
     { path: "/revenue", label: "매출 대시보드", icon: "💰" },
+    { path: "/pricing", label: "객실 가격 분석", icon: "💸" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
     { path: "/occupancy-rate", label: "객실 가동률", icon: "📈" },
     { path: "/country", label: "국가별 점유율", icon: "🌍" },
+    { path: "/calendar", label: "예약 캘린더", icon: "📆" },
     { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
     { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
+    { path: "/ai-manager", label: "AI 매니저", icon: "🤖" },
+    { path: "/ai-assistant", label: "AI 업무 비서", icon: "💬" },
   ];
 
   const logout = () => {
@@ -789,21 +810,47 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
   const [modalTitle, setModalTitle] = useState("");
 
   const fetchData = async () => {
-    // date 기준으로 안전하게 조회
-    console.log(`Fetching Dashboard: ${targetMonth}, ${viewMode}`);
-    
-    const q = query(
-  collection(db, "reservations"),
-  where("bookDate", ">=", `${targetMonth}-01`),
-  where("bookDate", "<=", `${targetMonth}-31`),
-  where("status", "==", viewMode)
-);
+    console.log(`📊 Fetching Dashboard: ${targetMonth}, ${viewMode}`);
 
+    // status 값은 "confirmed" 또는 "cancelled" (텍스트)
+    const targetStatus = viewMode === "confirmed" ? "confirmed" : "cancelled";
+
+    // Firestore 쿼리 최적화: status로 먼저 필터링
+    const q = query(
+      collection(db, "reservations"),
+      where("status", "==", targetStatus)
+    );
 
     const snapshot = await getDocs(q);
-    const reservations = snapshot.docs.map((doc) => doc.data());
+    console.log(`📦 Total ${targetStatus} reservations in Firestore: ${snapshot.docs.length}`);
 
-    console.log("Fetched Records:", reservations.length);
+    // 클라이언트에서 날짜 필터링
+    const allReservations = snapshot.docs
+      .map((doc) => doc.data())
+      .filter((r) => {
+        // 날짜 필터링: bookDate가 우선 (Firestore에 저장된 실제 필드명)
+        const bookTime = r.bookDate || r.firstNight || '';
+
+        // 해당 월에 속하는지 확인 (YYYY-MM 형식)
+        if (bookTime && typeof bookTime === 'string') {
+          return bookTime.startsWith(targetMonth);
+        }
+        return false;
+      });
+
+    console.log(`📅 ${targetMonth}월 필터링 결과: ${allReservations.length}건`);
+
+    // Deduplicate by bookId (same reservation across multiple accounts)
+    const uniqueReservations = new Map();
+    allReservations.forEach((r) => {
+      const key = r.bookId || r.refNum || `${r.guestName}_${r.firstNight}`;
+      if (!uniqueReservations.has(key)) {
+        uniqueReservations.set(key, r);
+      }
+    });
+    const reservations = Array.from(uniqueReservations.values());
+
+    console.log(`✅ 중복 제거 후 최종: ${reservations.length}건 (중복 ${allReservations.length - reservations.length}건 제거)`);
 
     let total = 0;
     const bCount = {};
@@ -1179,9 +1226,9 @@ function ArrivalsDashboard() {
     fetchTodayArrivals();
   }, [selectedDate]);
 
-  // 고객 이름 검색 함수
+  // 고객 이름 검색 함수 (1글자부터 자동 검색)
   const searchGuests = async (queryText) => {
-    if (!queryText || queryText.trim().length < 2) {
+    if (!queryText || queryText.trim().length < 1) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
@@ -1536,6 +1583,72 @@ function InstallPrompt({ onClose }) {
 }
 
 // ==============================
+// 📱 PWA 설치 배너
+// ==============================
+function PWAInstallBanner({ onInstall, onDismiss }) {
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 10000,
+      backgroundColor: '#0071E3',
+      color: 'white',
+      padding: '16px 24px',
+      borderRadius: '16px',
+      boxShadow: '0 8px 32px rgba(0, 113, 227, 0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      maxWidth: '90%',
+      animation: 'slideUp 0.3s ease-out'
+    }}>
+      <div style={{ fontSize: '32px' }}>📱</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: '600', fontSize: '15px', marginBottom: '4px' }}>
+          홈 화면에 추가하기
+        </div>
+        <div style={{ fontSize: '13px', opacity: 0.9 }}>
+          앱처럼 빠르고 편리하게 사용하세요
+        </div>
+      </div>
+      <button
+        onClick={onInstall}
+        style={{
+          backgroundColor: 'white',
+          color: '#0071E3',
+          border: 'none',
+          padding: '10px 20px',
+          borderRadius: '10px',
+          fontWeight: '600',
+          fontSize: '14px',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        설치
+      </button>
+      <button
+        onClick={onDismiss}
+        style={{
+          backgroundColor: 'transparent',
+          color: 'white',
+          border: 'none',
+          fontSize: '24px',
+          cursor: 'pointer',
+          padding: '4px',
+          opacity: 0.7,
+          lineHeight: 1
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ==============================
 // 🌐 App — 루트 컴포넌트
 // ==============================
 function App() {
@@ -1544,6 +1657,8 @@ function App() {
   const [globalMonth, setGlobalMonth] = useState(new Date().toISOString().slice(0, 7));
   const [syncing, setSyncing] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(true);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showPWABanner, setShowPWABanner] = useState(false);
 
   const handleSync = async () => {
     if (!window.confirm("Beds24에서 최신 예약을 가져오시겠습니까?\n(약 10초 정도 소요됩니다)")) return;
@@ -1567,6 +1682,62 @@ function App() {
     setSyncing(false);
   };
 
+  // PWA 설치 핸들러
+  const handlePWAInstall = async () => {
+    if (!deferredPrompt) return;
+
+    // 설치 프롬프트 표시
+    deferredPrompt.prompt();
+
+    // 사용자의 선택 대기
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA 설치 결과: ${outcome}`);
+
+    // 이벤트 초기화
+    setDeferredPrompt(null);
+    setShowPWABanner(false);
+  };
+
+  // PWA 배너 닫기 핸들러
+  const handlePWADismiss = () => {
+    setShowPWABanner(false);
+    // 7일 동안 다시 표시하지 않음
+    localStorage.setItem('pwa-install-dismissed', new Date().toISOString());
+  };
+
+  // PWA 설치 프롬프트 핸들러
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      // 브라우저 기본 설치 배너 막기
+      e.preventDefault();
+      // 나중에 사용하기 위해 이벤트 저장
+      setDeferredPrompt(e);
+
+      // 로컬스토리지에서 이전에 닫았는지 확인
+      const dismissed = localStorage.getItem('pwa-install-dismissed');
+      const dismissedDate = dismissed ? new Date(dismissed) : null;
+      const now = new Date();
+
+      // 7일이 지났거나 처음이면 배너 표시
+      if (!dismissedDate || (now - dismissedDate) > 7 * 24 * 60 * 60 * 1000) {
+        setShowPWABanner(true);
+      }
+    };
+
+    // 이미 설치되어 있는지 확인
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone
+      || document.referrer.includes('android-app://');
+
+    if (!isStandalone) {
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -1585,17 +1756,25 @@ function App() {
       {showInstallPrompt && (
         <InstallPrompt onClose={() => setShowInstallPrompt(false)} />
       )}
+      {/* PWA 설치 배너 */}
+      {showPWABanner && (
+        <PWAInstallBanner onInstall={handlePWAInstall} onDismiss={handlePWADismiss} />
+      )}
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="dashboard-layout">
           <Sidebar onSync={handleSync} />
           <main className="main-content">
             <Routes>
               <Route path="/" element={<TodaySummaryDashboard />} />
+              <Route path="/ai-manager" element={<AiManager />} />
+              <Route path="/ai-assistant" element={<AiChatbot />} />
               <Route path="/performance" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
+              <Route path="/pricing" element={<RoomPricingDashboard />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/occupancy-rate" element={<OccupancyRateDashboard />} />
               <Route path="/country" element={<CountryOccupancyDashboard />} />
+              <Route path="/calendar" element={<CalendarDashboard />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
               <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>

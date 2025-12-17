@@ -1,5 +1,5 @@
 // HARU Dashboard Service Worker
-const CACHE_NAME = 'haru-dashboard-v1';
+const CACHE_NAME = 'haru-dashboard-v3';
 const urlsToCache = [
   '/',
   '/index.html',

@@ -115,86 +115,18 @@ const OccupancyRateDashboard = () => {
         .map(d => d.data())
         .filter(r => r.status === "confirmed");
 
-      // 디버깅: 조회된 예약 데이터 확인
       console.log(`📊 가동률 계산: 총 ${allReservations.length}건의 confirmed 예약 데이터 조회됨`);
       console.log(`📅 조회 기간: ${oldestMonth.start} ~ ${latestMonth.end}`);
 
-      // 아라키초A 201호의 12월 예약만 필터링해서 확인
-      const [selYear, selMonth] = selectedMonth.split('-').map(Number);
-      const selDays = getDaysInMonth(selYear, selMonth);
-      const selMonthEnd = `${selectedMonth}-${String(selDays).padStart(2, '0')}`;
-
-      // ★ 중요: 해당 월에 숙박한 예약만 (체크인이 그 달이거나, 체크아웃이 그 달인 경우)
-      // 단, 체크인/체크아웃 모두 그 달 밖이면 제외
-      const testRoom = allReservations.filter(r => {
-        if (r.building !== "아라키초A" || r.room !== "201호") return false;
-
-        // 예약의 실제 숙박 기간이 선택한 월과 겹치는지 확인
-        // arrival이 월 끝보다 작거나 같고, departure가 월 시작보다 크거나 같으면 겹침
-        return r.arrival <= selMonthEnd && r.departure > `${selectedMonth}-01`;
-      });
-
-      console.log(`🏠 아라키초A 201호 (${selectedMonth}): ${testRoom.length}건`);
-
-      // 각 예약의 날짜와 예약 접수일 출력
-      testRoom.forEach((r, idx) => {
-        const bookMonth = r.bookDate ? r.bookDate.slice(0, 7) : '알수없음';
-        console.log(`  예약 ${idx + 1}: ${r.arrival} ~ ${r.departure} | 예약접수: ${bookMonth} | ${r.guestName || '이름없음'}`);
-      });
-
-      // 아라키초A 201호의 실제 점유 날짜 계산
-      const testOccupiedDays = getOccupiedDaysSet(testRoom, `${selectedMonth}-01`, selMonthEnd);
-
-      // 점유된 날짜 리스트 출력 (디버깅용)
-      const occupiedDatesList = new Set();
-      testRoom.forEach(r => {
-        const resStart = new Date(Math.max(new Date(r.arrival), new Date(`${selectedMonth}-01`)));
-        const resEnd = new Date(r.departure);
-        resEnd.setDate(resEnd.getDate() - 1); // departure 전날까지만
-
-        const actualEnd = resEnd > new Date(selMonthEnd) ? new Date(selMonthEnd) : resEnd;
-
-        if (resStart <= actualEnd) {
-          const current = new Date(resStart);
-          while (current <= actualEnd) {
-            occupiedDatesList.add(current.getDate());
-            current.setDate(current.getDate() + 1);
-          }
-        }
-      });
-
-      const occupiedDaysArray = Array.from(occupiedDatesList).sort((a, b) => a - b);
-      const vacantDaysArray = [];
-      for (let day = 1; day <= selDays; day++) {
-        if (!occupiedDatesList.has(day)) {
-          vacantDaysArray.push(day);
-        }
-      }
-
-      console.log(`📅 아라키초A 201호 점유일수: ${testOccupiedDays}일 / ${selDays}일`);
-      console.log(`📊 가동률: ${(testOccupiedDays/selDays*100).toFixed(1)}%`);
-      console.log(`✅ 점유된 날: ${occupiedDaysArray.join(', ')}`);
-      console.log(`❌ 비어있는 날: ${vacantDaysArray.join(', ')}`);
-      console.log(`🔍 공실일수: ${vacantDaysArray.length}일`);
-
-      // 베드24와 비교 (12월은 31일, 빈날 6일 예상: 3,4,16,17,18,28)
-      const expectedVacant = [3, 4, 16, 17, 18, 28];
-      const matches = expectedVacant.filter(d => vacantDaysArray.includes(d));
-      console.log(`🎯 베드24 예상 공실: ${expectedVacant.join(', ')}`);
-      console.log(`🎯 일치하는 날: ${matches.join(', ')} (${matches.length}/${expectedVacant.length})`);
-
-      if (vacantDaysArray.length === expectedVacant.length && matches.length === expectedVacant.length) {
-        console.log(`✅ 베드24와 완벽하게 일치!`);
-      } else {
-        console.warn(`⚠️ 불일치 발견!`);
-      }
-
-      // ===== 월별 가동률 계산 =====
+      // ===== 월별 가동률 계산 (사노시 제외) =====
       const monthlyRates = monthsToFetch.map(m => {
         let totalOccupiedDays = 0;
         let totalAvailableDays = 0;
 
         Object.keys(BUILDING_ROOMS).forEach(building => {
+          // ★ 사노시는 전체 가동률 계산에서 제외 (독채 + 다른 업체 운영)
+          if (building === "사노시") return;
+
           const rooms = BUILDING_ROOMS[building];
           rooms.forEach(room => {
             // 이 객실의 해당 월 예약 필터링
@@ -288,9 +220,13 @@ const OccupancyRateDashboard = () => {
       setBuildingData(buildingRates);
       setRoomData(roomDetails);
 
-      // 전체 평균 가동률
-      const totalOccupied = buildingRates.reduce((sum, b) => sum + b.occupiedDays, 0);
-      const totalAvailable = buildingRates.reduce((sum, b) => sum + b.availableDays, 0);
+      // 전체 평균 가동률 (사노시 제외)
+      const totalOccupied = buildingRates
+        .filter(b => b.name !== "사노시")
+        .reduce((sum, b) => sum + b.occupiedDays, 0);
+      const totalAvailable = buildingRates
+        .filter(b => b.name !== "사노시")
+        .reduce((sum, b) => sum + b.availableDays, 0);
       const overall = totalAvailable > 0 ? (totalOccupied / totalAvailable * 100) : 0;
       setOverallRate(parseFloat(overall.toFixed(1)));
 
@@ -342,27 +278,30 @@ const OccupancyRateDashboard = () => {
           {/* KPI 카드 */}
           <div className="kpi-grid">
             <div className="kpi-card" style={{ borderLeft: `5px solid ${getRateColor(overallRate)}` }}>
-              <div className="kpi-label">전체 평균 가동률</div>
+              <div className="kpi-label">전체 평균 가동률 (사노시 제외)</div>
               <div className="kpi-value" style={{ color: getRateColor(overallRate) }}>
                 {overallRate}%
               </div>
               <div className="kpi-sub">{getRateGrade(overallRate)}</div>
             </div>
 
+            {/* 사노시 가동률 독립 표시 */}
+            {buildingData.find(b => b.name === "사노시") && (
+              <div className="kpi-card" style={{ borderLeft: "5px solid #86868B" }}>
+                <div className="kpi-label">사노시 가동률 (독채/별도 운영)</div>
+                <div className="kpi-value" style={{ color: getRateColor(buildingData.find(b => b.name === "사노시").rate) }}>
+                  {buildingData.find(b => b.name === "사노시").rate}%
+                </div>
+                <div className="kpi-sub">{getRateGrade(buildingData.find(b => b.name === "사노시").rate)}</div>
+              </div>
+            )}
+
             <div className="kpi-card" style={{ borderLeft: "5px solid #0071E3" }}>
               <div className="kpi-label">총 건물 수</div>
               <div className="kpi-value" style={{ color: "#0071E3" }}>
-                {buildingData.length}개
+                {buildingData.filter(b => b.name !== "사노시").length}개
               </div>
-              <div className="kpi-sub">관리 대상</div>
-            </div>
-
-            <div className="kpi-card" style={{ borderLeft: "5px solid #5856D6" }}>
-              <div className="kpi-label">총 객실 수</div>
-              <div className="kpi-value" style={{ color: "#5856D6" }}>
-                {Object.values(BUILDING_ROOMS).flat().length}개
-              </div>
-              <div className="kpi-sub">전체 객실</div>
+              <div className="kpi-sub">사노시 제외</div>
             </div>
 
             {lowSeasonMonths.length > 0 && (
@@ -380,7 +319,7 @@ const OccupancyRateDashboard = () => {
 
           {/* 월별 가동률 추이 차트 (최근 12개월) */}
           <div className="chart-card">
-            <div className="chart-title">📈 월별 가동률 추이 (최근 12개월)</div>
+            <div className="chart-title">📈 월별 가동률 추이 (최근 12개월) - 사노시 제외</div>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={monthlyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -399,7 +338,7 @@ const OccupancyRateDashboard = () => {
                 <Line
                   type="monotone"
                   dataKey="rate"
-                  name="가동률"
+                  name="가동률 (사노시 제외)"
                   stroke="#FF9500"
                   strokeWidth={3}
                   activeDot={{ r: 8 }}
@@ -422,7 +361,7 @@ const OccupancyRateDashboard = () => {
               marginTop: "10px",
               textAlign: "center"
             }}>
-              💡 가동률 60% 미만인 월은 비수기로 분류됩니다
+              💡 가동률 60% 미만인 월은 비수기로 분류됩니다 (사노시는 독채/별도 운영으로 전체 가동률에서 제외)
             </div>
           </div>
 
@@ -446,9 +385,22 @@ const OccupancyRateDashboard = () => {
                   name="가동률"
                   fill="#FF9500"
                   radius={[4, 4, 0, 0]}
+                  shape={(props) => {
+                    // 사노시는 회색으로 표시
+                    const fill = props.name === "사노시" ? "#86868B" : "#FF9500";
+                    return <rect {...props} fill={fill} />;
+                  }}
                 />
               </BarChart>
             </ResponsiveContainer>
+            <div style={{
+              fontSize: "12px",
+              color: "#86868B",
+              marginTop: "10px",
+              textAlign: "center"
+            }}>
+              💡 사노시(회색)는 독채/별도 운영으로 전체 가동률 계산에서 제외됩니다
+            </div>
           </div>
 
           {/* 건물별 상세 가동률 (객실별) */}
@@ -456,18 +408,37 @@ const OccupancyRateDashboard = () => {
             const building = buildingData.find(b => b.name === bName);
             if (!building) return null;
 
-            const rooms = Object.keys(roomData[bName] || {}).sort();
+            // 객실을 가동률 높은 순서대로 정렬 (가동률 같으면 객실명 순서)
+            const rooms = Object.keys(roomData[bName] || {}).sort((a, b) => {
+              const rateA = roomData[bName][a].rate;
+              const rateB = roomData[bName][b].rate;
+
+              // 가동률이 다르면 가동률 내림차순
+              if (rateA !== rateB) {
+                return rateB - rateA;
+              }
+
+              // 가동률이 같으면 객실명 오름차순
+              return a.localeCompare(b, 'ko');
+            });
             if (rooms.length === 0) return null;
 
             return (
               <div key={bName} className="building-section">
                 <div className="building-title" style={{
-                  color: "#FF9500",
+                  color: bName === "사노시" ? "#86868B" : "#FF9500",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center"
                 }}>
-                  <span>🏢 {bName}</span>
+                  <span>
+                    🏢 {bName}
+                    {bName === "사노시" && (
+                      <span style={{ fontSize: "12px", marginLeft: "8px", color: "#86868B", fontWeight: "normal" }}>
+                        (독채/별도 운영 - 전체 가동률 제외)
+                      </span>
+                    )}
+                  </span>
                   <span style={{ fontSize: "14px", fontWeight: "normal" }}>
                     평균 가동률: {' '}
                     <span style={{

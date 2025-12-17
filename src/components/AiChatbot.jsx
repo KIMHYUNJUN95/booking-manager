@@ -10,10 +10,11 @@ function AiChatbot() {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("글로벌 인텔리전스 데이터 수집 중...");
 
-  // ⚠️ 중요: 실제 운영 시 환경변수로 이동 필요
-  const API_KEY = process.env.REACT_APP_OPENAI_API_KEY || "YOUR_OPENAI_API_KEY";
-  const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY || "YOUR_WEATHER_API_KEY";
-  const NEWS_API_KEY = process.env.REACT_APP_NEWS_API_KEY || "YOUR_NEWS_API_KEY";
+  // ⚠️ 로컬에서 직접 API 키 입력 필요 (GitHub에 올리면 안됨!)
+  const API_KEY = process.env.REACT_APP_OPENAI_API_KEY || "YOUR_OPENAI_API_KEY_HERE";
+
+  // 뉴스 API (선택) - newsapi.org에서 무료 발급 가능
+  const NEWS_API_KEY = process.env.REACT_APP_NEWS_API_KEY || "";
 
   const messagesEndRef = useRef(null);
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -42,36 +43,44 @@ function AiChatbot() {
     }
   };
 
-  // 2. 날씨 데이터 (OpenWeatherMap)
+  // 2. 날씨 데이터 (Open-Meteo - 무료, 키 불필요!)
   const fetchWeather = async () => {
-    if (!WEATHER_API_KEY || WEATHER_API_KEY === "YOUR_WEATHER_API_KEY") {
-      return {
-        current: "API 키 필요",
-        forecast: [],
-        note: "OpenWeatherMap API 키를 설정하세요"
-      };
-    }
     try {
       // 신주쿠 좌표
       const lat = 35.6938;
       const lon = 139.7034;
       const response = await axios.get(
-        `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric&lang=ja`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,relative_humidity_2m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia/Tokyo&forecast_days=7`
       );
 
-      const current = response.data.list[0];
-      const forecast = response.data.list.filter((_, i) => i % 8 === 0).slice(0, 5).map(item => ({
-        date: dayjs(item.dt * 1000).format('MM/DD'),
-        temp: Math.round(item.main.temp),
-        weather: item.weather[0].description,
-        icon: item.weather[0].main
+      const weatherCodeToText = (code) => {
+        const codes = {
+          0: "맑음 ☀️", 1: "대체로 맑음 🌤️", 2: "구름 조금 ⛅", 3: "흐림 ☁️",
+          45: "안개 🌫️", 48: "안개 🌫️",
+          51: "가벼운 이슬비 🌧️", 53: "이슬비 🌧️", 55: "이슬비 🌧️",
+          61: "약한 비 🌧️", 63: "비 🌧️", 65: "강한 비 🌧️",
+          71: "약한 눈 🌨️", 73: "눈 🌨️", 75: "강한 눈 🌨️",
+          80: "소나기 🌧️", 81: "소나기 🌧️", 82: "강한 소나기 🌧️",
+          95: "뇌우 ⛈️", 96: "뇌우+우박 ⛈️", 99: "뇌우+우박 ⛈️"
+        };
+        return codes[code] || "알 수 없음";
+      };
+
+      const current = response.data.current;
+      const daily = response.data.daily;
+
+      const forecast = daily.time.slice(0, 7).map((date, i) => ({
+        date: dayjs(date).format('MM/DD (ddd)'),
+        tempMax: Math.round(daily.temperature_2m_max[i]),
+        tempMin: Math.round(daily.temperature_2m_min[i]),
+        weather: weatherCodeToText(daily.weather_code[i])
       }));
 
       return {
         current: {
-          temp: Math.round(current.main.temp),
-          weather: current.weather[0].description,
-          humidity: current.main.humidity
+          temp: Math.round(current.temperature_2m),
+          weather: weatherCodeToText(current.weather_code),
+          humidity: current.relative_humidity_2m
         },
         forecast,
         note: null

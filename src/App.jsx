@@ -11,10 +11,6 @@ import CleaningDashboard from './components/CleaningDashboard.jsx';
 import OccupancyRateDashboard from './components/OccupancyRateDashboard.jsx';
 import TodaySummaryDashboard from './components/TodaySummaryDashboard.jsx';
 import CountryOccupancyDashboard from './components/CountryOccupancyDashboard.jsx';
-import CalendarDashboard from './components/CalendarDashboard.jsx';
-import RoomPricingDashboard from './components/RoomPricingDashboard.jsx';
-import AiListingPage from './components/AiListingPage'; 
-import AiManager from './components/AiListingPage';
 import AiChatbot from './components/AiChatbot';
 
 // ★★★ 서버 주소 ★★★
@@ -599,15 +595,12 @@ function Sidebar({ onSync }) {
     { path: "/", label: "오늘의 요약", icon: "📅" },
     { path: "/performance", label: "예약 접수 대시보드", icon: "📊" },
     { path: "/revenue", label: "매출 대시보드", icon: "💰" },
-    { path: "/pricing", label: "객실 가격 분석", icon: "💸" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
     { path: "/occupancy-rate", label: "객실 가동률", icon: "📈" },
     { path: "/country", label: "국가별 점유율", icon: "🌍" },
-    { path: "/calendar", label: "예약 캘린더", icon: "📆" },
     { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
     { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
-    { path: "/ai-manager", label: "AI 매니저", icon: "🤖" },
-    { path: "/ai-assistant", label: "AI 업무 비서", icon: "💬" },
+    { path: "/ai-assistant", label: "AI 브리핑", icon: "📡" },
   ];
 
   const logout = () => {
@@ -1766,15 +1759,12 @@ function App() {
           <main className="main-content">
             <Routes>
               <Route path="/" element={<TodaySummaryDashboard />} />
-              <Route path="/ai-manager" element={<AiManager />} />
               <Route path="/ai-assistant" element={<AiChatbot />} />
               <Route path="/performance" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
-              <Route path="/pricing" element={<RoomPricingDashboard />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/occupancy-rate" element={<OccupancyRateDashboard />} />
               <Route path="/country" element={<CountryOccupancyDashboard />} />
-              <Route path="/calendar" element={<CalendarDashboard />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
               <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>

@@ -178,8 +178,10 @@ const RevenueDashboard = () => {
       // ★ 1박당 기준 매출 집계 (베드24와 동일한 방식)
       // 각 예약의 총 박수를 계산하고, 해당 기간/월에 숙박한 박수만큼만 매출 분배
 
-      // 디버깅: 특정 예약 추적용 (아라키초A 201호의 12월 예약)
+      // 디버깅: 아라키초A 12월 예약 전체 추적
       let debugCount = 0;
+      let arakiDecemberTotal = 0;
+      let arakiDecemberBookings = [];
 
       allDocs.forEach(doc => {
         if (!doc.arrival || !doc.departure) return;
@@ -260,6 +262,33 @@ const RevenueDashboard = () => {
             bMapCurrent[bName] = (bMapCurrent[bName] || 0) + overlapRevenue;
             if (!rMapCurrent[bName]) rMapCurrent[bName] = {};
             rMapCurrent[bName][rName] = (rMapCurrent[bName][rName] || 0) + overlapRevenue;
+
+            // 디버깅: 아라키초A 12월 예약 추적
+            if (bName === "아라키초A") {
+              // 12월에 겹치는 부분 계산
+              const dec2025Start = new Date(2025, 11, 1); // 2025년 12월 1일
+              const dec2025End = new Date(2025, 11, 31); // 2025년 12월 31일
+
+              if (overlapEnd >= dec2025Start && overlapStart <= dec2025End) {
+                const decOverlapStart = new Date(Math.max(overlapStart, dec2025Start));
+                const decOverlapEnd = new Date(Math.min(overlapEnd, dec2025End));
+                const decNights = Math.floor((decOverlapEnd - decOverlapStart) / (1000 * 60 * 60 * 24)) + 1;
+                const decRevenue = pricePerNight * decNights;
+
+                arakiDecemberTotal += decRevenue;
+                arakiDecemberBookings.push({
+                  guest: doc.guestName || 'Unknown',
+                  room: rName,
+                  arrival: doc.arrival,
+                  departure: doc.departure,
+                  totalPrice: totalPrice,
+                  totalNights: totalNights,
+                  pricePerNight: Math.round(pricePerNight),
+                  decNights: decNights,
+                  decRevenue: Math.round(decRevenue)
+                });
+              }
+            }
           }
         }
 
@@ -314,6 +343,16 @@ const RevenueDashboard = () => {
 
       console.log(`📊 월별 매출 데이터:`, chartData);
       console.log(`💵 총 매출 - 현재: ¥${calcCurrentTotal.toLocaleString()}, 비교: ¥${calcCompareTotal.toLocaleString()}`);
+
+      // 아라키초A 12월 디버깅 로그
+      console.log(`\n🔍 === 아라키초A 12월 상세 분석 ===`);
+      console.log(`📌 총 예약 건수: ${arakiDecemberBookings.length}건`);
+      console.log(`📌 12월 매출 합계: ¥${Math.round(arakiDecemberTotal).toLocaleString()}`);
+      console.log(`\n📋 예약 상세 목록:`);
+      arakiDecemberBookings.forEach((b, i) => {
+        console.log(`[${i+1}] ${b.room} | ${b.guest} | ${b.arrival}~${b.departure} | 총${b.totalNights}박 ¥${b.totalPrice.toLocaleString()} | 12월 ${b.decNights}박 ¥${b.decRevenue.toLocaleString()}`);
+      });
+      console.log(`\n💰 Beds24 금액과 비교해보세요!`);
 
       // 건물별 데이터 (정렬)
       const buildingChartData = BUILDING_ORDER

@@ -55,7 +55,8 @@ const cleanPrice = (val) => {
 };
 const determineStatus = (b) => {
     const s = String(b.status);
-    if (s === "1" || s === "2") { return "confirmed"; }
+    // ★ status 0 (신규/新規), 1 (확인됨), 2 (확인됨2) 모두 confirmed로 처리
+    if (s === "0" || s === "1" || s === "2") { return "confirmed"; }
     return "cancelled";
 };
 

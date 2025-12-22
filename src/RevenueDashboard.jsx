@@ -41,6 +41,13 @@ const BUILDING_ORDER = [
   "다카다노바바", "오쿠보A동", "오쿠보B동", "오쿠보C동", "사노시"
 ];
 
+// ★ 날짜 문자열을 로컬 시간대로 파싱 (시간대 문제 해결)
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return null;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const RevenueDashboard = () => {
   // 현재 기수를 기본값으로 설정
   const [selectedPeriod, setSelectedPeriod] = useState(getCurrentPeriod());
@@ -76,13 +83,15 @@ const RevenueDashboard = () => {
 
     // 커스텀 날짜 비교용 (1년 전 동일 기간)
     if (useCustomDate && customStartDate && customEndDate && isCompare) {
-      const start = new Date(customStartDate);
-      const end = new Date(customEndDate);
+      const start = parseLocalDate(customStartDate);
+      const end = parseLocalDate(customEndDate);
       start.setFullYear(start.getFullYear() - 1);
       end.setFullYear(end.getFullYear() - 1);
+      // 로컬 날짜를 YYYY-MM-DD 형식으로 변환
+      const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return {
-        startDate: start.toISOString().slice(0, 10),
-        endDate: end.toISOString().slice(0, 10)
+        startDate: formatDate(start),
+        endDate: formatDate(end)
       };
     }
 
@@ -99,8 +108,8 @@ const RevenueDashboard = () => {
   const getMonthLabels = () => {
     if (useCustomDate && customStartDate && customEndDate) {
       // 커스텀 날짜일 때는 해당 범위의 월만 표시
-      const start = new Date(customStartDate);
-      const end = new Date(customEndDate);
+      const start = parseLocalDate(customStartDate);
+      const end = parseLocalDate(customEndDate);
       const labels = [];
 
       let current = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -190,8 +199,8 @@ const RevenueDashboard = () => {
         const rName = doc.room || "Unknown";
 
         // 총 박수 계산 (arrival ~ departure 전날까지)
-        const arrivalDate = new Date(doc.arrival);
-        const departureDate = new Date(doc.departure);
+        const arrivalDate = parseLocalDate(doc.arrival);
+        const departureDate = parseLocalDate(doc.departure);
         const totalNights = Math.floor((departureDate - arrivalDate) / (1000 * 60 * 60 * 24));
 
         if (totalNights <= 0) return; // 잘못된 데이터 제외
@@ -211,8 +220,8 @@ const RevenueDashboard = () => {
         }
 
         // 현재 기수/커스텀 범위 처리
-        const currentStart = new Date(currentRange.startDate);
-        const currentEnd = new Date(currentRange.endDate);
+        const currentStart = parseLocalDate(currentRange.startDate);
+        const currentEnd = parseLocalDate(currentRange.endDate);
 
         // 예약 기간이 현재 범위와 겹치는지 확인
         if (departureDate > currentStart && arrivalDate <= currentEnd) {
@@ -245,6 +254,8 @@ const RevenueDashboard = () => {
 
               if (monthlyMap[monthKey]) {
                 monthlyMap[monthKey].current += monthRevenue;
+              } else {
+                console.warn(`⚠️ 월별 키 누락! monthKey=${monthKey}, 매출=¥${Math.round(monthRevenue).toLocaleString()}, 건물=${bName}, 객실=${rName}`);
               }
 
               // 디버깅: 월별 분배 로그
@@ -264,8 +275,8 @@ const RevenueDashboard = () => {
         }
 
         // 비교 기수/범위 처리
-        const compareStart = new Date(compareRange.startDate);
-        const compareEnd = new Date(compareRange.endDate);
+        const compareStart = parseLocalDate(compareRange.startDate);
+        const compareEnd = parseLocalDate(compareRange.endDate);
 
         if (departureDate > compareStart && arrivalDate <= compareEnd) {
           const overlapStart = new Date(Math.max(arrivalDate, compareStart));
@@ -288,7 +299,9 @@ const RevenueDashboard = () => {
 
               let monthKey;
               if (useCustomDate) {
-                monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+                // 비교 기간(전년)의 월을 현재 기간의 월에 매핑 (예: 2024-07 → 2025-07)
+                const currentYear = current.getFullYear() + 1; // 1년 후 연도로 매핑
+                monthKey = `${currentYear}-${String(current.getMonth() + 1).padStart(2, '0')}`;
               } else {
                 monthKey = String(current.getMonth() + 1).padStart(2, '0');
               }
@@ -312,8 +325,18 @@ const RevenueDashboard = () => {
       // 차트용 배열 변환 (월 순서 보장)
       const chartData = monthLabels.map(m => monthlyMap[m.key] || { month: m.label, current: 0, compare: 0 });
 
+      // ★ 데이터 정합성 검증
+      const monthlySum = chartData.reduce((sum, m) => sum + m.current, 0);
+      const buildingSum = Object.values(bMapCurrent).reduce((sum, v) => sum + v, 0);
+
       console.log(`📊 월별 매출 데이터:`, chartData);
       console.log(`💵 총 매출 - 현재: ¥${calcCurrentTotal.toLocaleString()}, 비교: ¥${calcCompareTotal.toLocaleString()}`);
+      console.log(`🔍 정합성 검증:`);
+      console.log(`   - 총 매출 (calcCurrentTotal): ¥${Math.round(calcCurrentTotal).toLocaleString()}`);
+      console.log(`   - 월별 합계 (monthlySum): ¥${Math.round(monthlySum).toLocaleString()}`);
+      console.log(`   - 건물별 합계 (buildingSum): ¥${Math.round(buildingSum).toLocaleString()}`);
+      console.log(`   - 월별 차이: ¥${Math.round(calcCurrentTotal - monthlySum).toLocaleString()}`);
+      console.log(`   - 건물별 차이: ¥${Math.round(calcCurrentTotal - buildingSum).toLocaleString()}`);
 
       // 건물별 데이터 (정렬)
       const buildingChartData = BUILDING_ORDER

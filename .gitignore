@@ -26,3 +26,4 @@ dist-ssr
 # Windows null device files
 nul
 **/nul
+build/

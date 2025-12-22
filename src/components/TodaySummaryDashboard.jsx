@@ -2,6 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from '../firebase';
 
+// ★ 날짜 문자열을 로컬 시간대로 파싱 (시간대 문제 해결)
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return null;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// ★ 오늘 날짜를 로컬 시간대로 YYYY-MM-DD 형식으로 반환
+const getTodayString = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+// 인건비 계산 상수
+const LABOR_COST = {
+  MIN_HOURLY: 1250,  // 최소 시급 (엔)
+  MAX_HOURLY: 1700,  // 최대 시급 (엔)
+  MIN_HOURS: 4,      // 최소 소요 시간 (청소 3시간 + 정리 1시간)
+  MAX_HOURS: 5       // 최대 소요 시간 (청소 4시간 + 정리 1시간)
+};
+
 const TodaySummaryDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [todayData, setTodayData] = useState({
@@ -9,7 +30,9 @@ const TodaySummaryDashboard = () => {
     checkouts: 0,
     revenue: 0,
     newBookings: 0,
-    cancellations: 0
+    cancellations: 0,
+    laborCostMin: 0,  // 최소 예상 인건비
+    laborCostMax: 0   // 최대 예상 인건비
   });
 
   useEffect(() => {
@@ -19,7 +42,7 @@ const TodaySummaryDashboard = () => {
   const fetchTodayData = async () => {
     setLoading(true);
     try {
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const today = getTodayString(); // 로컬 시간대 기준 YYYY-MM-DD
 
       // 1. 오늘 입실 (arrival = today)
       const checkinQuery = query(
@@ -57,30 +80,30 @@ const TodaySummaryDashboard = () => {
       const cancelSnapshot = await getDocs(cancelQuery);
       const cancellations = cancelSnapshot.size;
 
-      // 5. 오늘 매출 (오늘 입실한 예약의 1박당 금액)
+      // 5. 오늘 매출 (오늘 입실한 예약의 전체 금액 합계)
       let todayRevenue = 0;
+      console.log(`📅 오늘(${today}) 입실 예약 ${checkinSnapshot.size}건 매출 계산:`);
       checkinSnapshot.docs.forEach(doc => {
         const data = doc.data();
         const totalPrice = Number(data.totalPrice || data.price) || 0;
-
-        // 총 박수 계산
-        const arrivalDate = new Date(data.arrival);
-        const departureDate = new Date(data.departure);
-        const totalNights = Math.floor((departureDate - arrivalDate) / (1000 * 60 * 60 * 24));
-
-        if (totalNights > 0) {
-          // 오늘 하루치 매출 (1박당 금액)
-          const pricePerNight = totalPrice / totalNights;
-          todayRevenue += pricePerNight;
-        }
+        todayRevenue += totalPrice;
+        console.log(`   - ${data.building} ${data.room}: ¥${totalPrice.toLocaleString()}`);
       });
+      console.log(`💰 오늘 총 매출: ¥${Math.round(todayRevenue).toLocaleString()}`);
+
+      // 6. 인건비 계산 (퇴실 수 기준 - 퇴실 후 청소)
+      const laborCostMin = checkouts * LABOR_COST.MIN_HOURS * LABOR_COST.MIN_HOURLY;
+      const laborCostMax = checkouts * LABOR_COST.MAX_HOURS * LABOR_COST.MAX_HOURLY;
+      console.log(`🧹 인건비 예상: ${checkouts}건 × (${LABOR_COST.MIN_HOURS}~${LABOR_COST.MAX_HOURS}시간) × (¥${LABOR_COST.MIN_HOURLY}~¥${LABOR_COST.MAX_HOURLY}) = ¥${laborCostMin.toLocaleString()} ~ ¥${laborCostMax.toLocaleString()}`);
 
       setTodayData({
         checkins,
         checkouts,
         revenue: Math.round(todayRevenue),
         newBookings,
-        cancellations
+        cancellations,
+        laborCostMin,
+        laborCostMax
       });
 
     } catch (error) {
@@ -150,7 +173,7 @@ const TodaySummaryDashboard = () => {
               borderLeft: "5px solid #FF9500",
               background: "linear-gradient(135deg, #ffffff 0%, #fff8f0 100%)"
             }}>
-              <div className="kpi-label">오늘 매출 (입실 기준)</div>
+              <div className="kpi-label">오늘 입실 총 매출</div>
               <div className="kpi-value" style={{ color: "#FF9500", fontSize: "36px" }}>
                 {formatCurrency(todayData.revenue)}
               </div>
@@ -198,6 +221,24 @@ const TodaySummaryDashboard = () => {
               </div>
               <div className="kpi-sub">Net Bookings</div>
             </div>
+
+            {/* 인건비 예상 지출 */}
+            <div className="kpi-card" style={{
+              borderLeft: "5px solid #8E8E93",
+              background: "linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)"
+            }}>
+              <div className="kpi-label">청소 인건비 예상 ({todayData.checkouts}건)</div>
+              <div className="kpi-value" style={{ color: "#8E8E93", fontSize: "28px" }}>
+                {todayData.checkouts === 0 ? (
+                  "¥ 0"
+                ) : (
+                  <>¥{todayData.laborCostMin.toLocaleString()} ~ ¥{todayData.laborCostMax.toLocaleString()}</>
+                )}
+              </div>
+              <div className="kpi-sub" style={{ fontSize: "11px", marginTop: "8px" }}>
+                {LABOR_COST.MIN_HOURS}~{LABOR_COST.MAX_HOURS}시간/방 × ¥{LABOR_COST.MIN_HOURLY.toLocaleString()}~¥{LABOR_COST.MAX_HOURLY.toLocaleString()}/시급
+              </div>
+            </div>
           </div>
 
           {/* 요약 메시지 */}
@@ -238,10 +279,11 @@ const TodaySummaryDashboard = () => {
             <strong>💡 참고:</strong>
             <ul style={{ marginTop: "10px", paddingLeft: "20px", lineHeight: "1.8" }}>
               <li><strong>오늘 입실/퇴실</strong>: 오늘 날짜에 체크인/체크아웃하는 게스트 수</li>
-              <li><strong>오늘 매출</strong>: 오늘 입실한 게스트들의 첫날 숙박 매출 (1박당 금액 기준)</li>
+              <li><strong>오늘 매출</strong>: 오늘 입실한 게스트들의 전체 예약 금액 합계</li>
               <li><strong>신규 예약</strong>: 오늘 접수된 확정 예약 건수</li>
               <li><strong>취소</strong>: 오늘 취소 처리된 예약 건수</li>
               <li><strong>순 예약</strong>: 신규 예약 - 취소 (양수면 증가, 음수면 감소)</li>
+              <li><strong>청소 인건비</strong>: 퇴실 수 × (4~5시간: 청소+정리) × (¥1,250~¥1,700 시급) 범위로 계산</li>
             </ul>
           </div>
         </>

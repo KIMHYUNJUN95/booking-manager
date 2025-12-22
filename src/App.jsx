@@ -11,15 +11,13 @@ import CleaningDashboard from './components/CleaningDashboard.jsx';
 import OccupancyRateDashboard from './components/OccupancyRateDashboard.jsx';
 import TodaySummaryDashboard from './components/TodaySummaryDashboard.jsx';
 import CountryOccupancyDashboard from './components/CountryOccupancyDashboard.jsx';
-import CalendarDashboard from './components/CalendarDashboard.jsx';
-import RoomPricingDashboard from './components/RoomPricingDashboard.jsx';
-import AiListingPage from './components/AiListingPage'; 
-import AiManager from './components/AiListingPage';
 import AiChatbot from './components/AiChatbot';
+import BuildingCalendar from './components/BuildingCalendar.jsx';
 
 // ★★★ 서버 주소 ★★★
 const GET_ARRIVALS_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/getTodayArrivals";
 const SYNC_BEDS24_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/syncBeds24";
+const SYNC_BEDS24_FULL_URL = "https://us-central1-my-booking-app-3f0e7.cloudfunctions.net/syncBeds24Full";
 
 // --- [1] 디자인 (Apple Style CSS) ---
 const styles = `
@@ -599,15 +597,13 @@ function Sidebar({ onSync }) {
     { path: "/", label: "오늘의 요약", icon: "📅" },
     { path: "/performance", label: "예약 접수 대시보드", icon: "📊" },
     { path: "/revenue", label: "매출 대시보드", icon: "💰" },
-    { path: "/pricing", label: "객실 가격 분석", icon: "💸" },
+    { path: "/calendar", label: "객실 캘린더", icon: "🗓️" },
     { path: "/occupancy", label: "숙박 현황 (Stay)", icon: "🛏️" },
     { path: "/occupancy-rate", label: "객실 가동률", icon: "📈" },
     { path: "/country", label: "국가별 점유율", icon: "🌍" },
-    { path: "/calendar", label: "예약 캘린더", icon: "📆" },
     { path: "/arrivals", label: "입실 / 퇴실 대시보드", icon: "🚪" },
     { path: "/cleaning", label: "청소 스케줄 관리", icon: "🧹" },
-    { path: "/ai-manager", label: "AI 매니저", icon: "🤖" },
-    { path: "/ai-assistant", label: "AI 업무 비서", icon: "💬" },
+    { path: "/ai-assistant", label: "AI 브리핑", icon: "📡" },
   ];
 
   const logout = () => {
@@ -623,8 +619,11 @@ function Sidebar({ onSync }) {
           <span>🏨</span> HARU Dashboard
         </div>
 
-        <button className="sync-btn" onClick={onSync}>
-          🔄 Beds24 동기화
+        <button className="sync-btn" onClick={() => onSync(false)}>
+          🔄 빠른 동기화
+        </button>
+        <button className="sync-btn" onClick={() => onSync(true)} style={{ marginTop: '4px', fontSize: '11px', opacity: 0.8 }}>
+          📦 전체 동기화 (2023~)
         </button>
 
         <nav className="nav-menu">
@@ -957,13 +956,22 @@ function PerformanceDashboard({ targetMonth, setTargetMonth }) {
       <div className="charts-grid">
         <div className="chart-card">
           <div className="chart-title">🏢 건물별 {viewMode === "confirmed" ? "접수" : "취소"}량</div>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.buildings}>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={data.buildings} margin={{ bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5EA" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#86868B", fontSize: 12 }} />
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#86868B", fontSize: 11 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: "#86868B", fontSize: 12 }} />
               <Tooltip cursor={{ fill: "rgba(0,0,0,0.05)" }} />
-              <Bar dataKey="count" fill={THEME_COLOR} radius={[6, 6, 0, 0]} barSize={40} />
+              <Bar dataKey="count" fill={THEME_COLOR} radius={[6, 6, 0, 0]} barSize={35} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1660,11 +1668,20 @@ function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPWABanner, setShowPWABanner] = useState(false);
 
-  const handleSync = async () => {
-    if (!window.confirm("Beds24에서 최신 예약을 가져오시겠습니까?\n(약 10초 정도 소요됩니다)")) return;
+  const handleSync = async (fullSync = false) => {
+    const syncUrl = fullSync ? SYNC_BEDS24_FULL_URL : SYNC_BEDS24_URL;
+    const syncType = fullSync ? "전체" : "빠른";
+    const timeEstimate = fullSync ? "1~2분" : "5~10초";
+
+    if (!window.confirm(`${syncType} 동기화를 실행하시겠습니까?\n\n` +
+      (fullSync
+        ? "• 전체 동기화: 2023년 1월부터 모든 예약 (느림)\n"
+        : "• 빠른 동기화: 오늘 ~ 향후 5개월 (빠름)\n") +
+      `• 예상 소요시간: ${timeEstimate}`)) return;
+
     setSyncing(true);
     try {
-      const response = await fetch(SYNC_BEDS24_URL, {
+      const response = await fetch(syncUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
@@ -1766,15 +1783,13 @@ function App() {
           <main className="main-content">
             <Routes>
               <Route path="/" element={<TodaySummaryDashboard />} />
-              <Route path="/ai-manager" element={<AiManager />} />
               <Route path="/ai-assistant" element={<AiChatbot />} />
               <Route path="/performance" element={<PerformanceDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
-              <Route path="/pricing" element={<RoomPricingDashboard />} />
+              <Route path="/calendar" element={<BuildingCalendar />} />
               <Route path="/occupancy" element={<OccupancyDashboard targetMonth={globalMonth} setTargetMonth={setGlobalMonth} />} />
               <Route path="/occupancy-rate" element={<OccupancyRateDashboard />} />
               <Route path="/country" element={<CountryOccupancyDashboard />} />
-              <Route path="/calendar" element={<CalendarDashboard />} />
               <Route path="/arrivals" element={<ArrivalsDashboard />} />
               <Route path="/cleaning" element={<CleaningDashboard />} />
             </Routes>
